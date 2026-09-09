@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#5a9e2f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Durability">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Durability Tracker</title>
+<style>
+:root{
+  --green:#5a9e2f;--green-d:#3f7420;--ink:#1c1c1c;--muted:#8a8a8a;
+  --line:#e4e4e4;--bg:#fff;--head:#f4f4f4;
+  --superset:#e6f5e2;--circuit:#e4f1fa;--opt:#fdeee4;
+  --amber:#e0a11b;--red:#c0392b;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font:16px/1.45 -apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+body{padding-bottom:env(safe-area-inset-bottom)}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px 120px}
+
+header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top) + 10px) 14px 0;margin:0 -14px 14px}
+.hrow{display:flex;align-items:center;gap:10px;justify-content:space-between}
+h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:.2px}
+.wk{font-size:.78rem;color:var(--muted)}
+.chip{font-size:.72rem;font-weight:800;padding:4px 10px;border-radius:20px;letter-spacing:.5px}
+.chip.green{background:#e8f3e4;color:var(--green-d)}
+.chip.yellow{background:#fdf3dd;color:#8a6100}
+.chip.red{background:#fbe4e1;color:var(--red)}
+.chip.none{background:#eee;color:#777}
+nav{display:flex;gap:2px;overflow-x:auto;margin-top:10px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:0 0 auto;background:none;border:0;border-bottom:3px solid transparent;
+  padding:10px 13px;font:inherit;font-size:.88rem;color:var(--muted);cursor:pointer}
+nav button.on{color:var(--ink);font-weight:700;border-bottom-color:var(--green)}
+
+.view{display:none}.view.on{display:block}
+h2{font-size:1.15rem;margin:4px 0 2px;font-weight:600}
+.sub{color:var(--muted);font-size:.85rem;margin:0 0 14px}
+h3{font-size:.75rem;text-transform:uppercase;letter-spacing:.9px;color:var(--muted);
+  margin:26px 0 8px;font-weight:800}
+
+.note{background:#fafafa;border-left:3px solid var(--green);padding:11px 14px;
+  font-size:.88rem;margin:0 0 16px;border-radius:0 4px 4px 0}
+.note.warn{border-left-color:var(--amber);background:#fffdf6}
+.note.stop{border-left-color:var(--red);background:#fff7f6}
+
+.ex{border:1px solid var(--line);border-radius:8px;margin-bottom:10px;overflow:hidden}
+.ex.superset{background:var(--superset)}
+.ex.circuit{background:var(--circuit)}
+.ex.optional{background:var(--opt)}
+.ex.done{opacity:.55}
+.exhead{display:flex;align-items:flex-start;gap:10px;padding:12px 13px}
+.exname{flex:1;min-width:0}
+.exname b{display:block;font-size:.97rem;font-weight:600;line-height:1.3}
+.exname a{color:var(--green-d);text-decoration:none}
+.exname small{display:block;color:var(--muted);font-size:.79rem;margin-top:3px;line-height:1.35}
+.target{flex:0 0 auto;text-align:right;font-size:.8rem;color:var(--muted);white-space:nowrap}
+.target b{display:block;color:var(--ink);font-size:.9rem}
+.flag{display:inline-block;font-size:.63rem;font-weight:800;padding:1px 5px;border-radius:3px;
+  margin-left:5px;vertical-align:1px}
+.flag.pri{background:#ffe9a8;color:#7a5600}
+.flag.r{background:#dceafa;color:#1d5b96}
+.flag.l{background:#fadede;color:#96331d}
+
+.sets{padding:0 13px 12px}
+.setrow{display:flex;gap:7px;align-items:center;margin-bottom:7px}
+.setrow span.n{width:20px;color:var(--muted);font-size:.8rem;font-weight:700}
+.setrow input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;
+  padding:9px 8px;font:inherit;font-size:.9rem;background:#fff;text-align:center}
+.setrow input:focus{outline:2px solid var(--green);border-color:transparent}
+.tick{flex:0 0 42px;height:38px;border:1px solid var(--line);background:#fff;border-radius:6px;
+  font-size:1rem;cursor:pointer;color:#bbb}
+.tick.on{background:var(--green);border-color:var(--green);color:#fff}
+.rm{flex:0 0 32px;height:38px;border:0;background:none;color:#ccc;font-size:1.1rem;cursor:pointer}
+.exbtns{display:flex;gap:8px;padding:0 13px 12px}
+.mini{border:1px solid var(--line);background:#fff;border-radius:6px;padding:7px 12px;
+  font:inherit;font-size:.8rem;cursor:pointer;color:#555}
+.mini:active{background:#f2f2f2}
+
+label.f{display:block;margin-bottom:13px}
+label.f span{display:block;font-size:.82rem;color:var(--muted);margin-bottom:5px;font-weight:600}
+input.t,select.t,textarea.t{width:100%;border:1px solid var(--line);border-radius:7px;
+  padding:11px;font:inherit;font-size:.95rem;background:#fff}
+textarea.t{min-height:78px;resize:vertical}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.seg{display:flex;gap:6px}
+.seg button{flex:1;border:1px solid var(--line);background:#fff;border-radius:7px;padding:11px 4px;
+  font:inherit;font-size:.85rem;font-weight:700;cursor:pointer;color:#777}
+.seg button.on[data-v=green]{background:var(--green);border-color:var(--green);color:#fff}
+.seg button.on[data-v=yellow]{background:var(--amber);border-color:var(--amber);color:#fff}
+.seg button.on[data-v=red]{background:var(--red);border-color:var(--red);color:#fff}
+
+.btn{display:block;width:100%;border:0;border-radius:8px;background:var(--green);color:#fff;
+  padding:15px;font:inherit;font-size:1rem;font-weight:700;cursor:pointer;margin-top:6px}
+.btn:active{background:var(--green-d)}
+.btn.sec{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.btn.dgr{background:#fff;color:var(--red);border:1px solid #f0cfcb}
+
+.timer{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 16px);
+  background:var(--ink);color:#fff;padding:12px 20px;border-radius:30px;font-weight:800;
+  font-variant-numeric:tabular-nums;display:none;z-index:40;box-shadow:0 6px 20px #0003;font-size:1rem}
+.timer.on{display:flex;gap:14px;align-items:center}
+.timer button{background:#ffffff26;border:0;color:#fff;border-radius:16px;padding:5px 11px;
+  font:inherit;font-size:.78rem;cursor:pointer}
+
+pre.out{background:#f7f7f7;border:1px solid var(--line);border-radius:8px;padding:12px;
+  font-size:.76rem;line-height:1.45;overflow:auto;max-height:340px;white-space:pre-wrap;
+  font-family:"SF Mono",Menlo,Consolas,monospace}
+table.hist{width:100%;border-collapse:collapse;font-size:.82rem}
+table.hist th{text-align:left;color:var(--muted);font-weight:600;padding:7px 5px;
+  border-bottom:1px solid var(--line);font-size:.75rem}
+table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.dot.green{background:var(--green)}.dot.yellow{background:var(--amber)}.dot.red{background:var(--red)}
+.empty{color:var(--muted);font-size:.88rem;padding:22px 0;text-align:center}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);
+  color:#fff;padding:11px 20px;border-radius:22px;font-size:.86rem;z-index:60;opacity:0;
+  transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:1}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-top:18px;
+  padding-top:14px;border-top:1px solid var(--line)}
+.legend i{display:inline-block;width:20px;height:11px;border:1px solid var(--line);margin-right:5px;vertical-align:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="hrow">
+    <div><h1>Durability Tracker</h1><div class="wk" id="wklab">—</div></div>
+    <div class="chip none" id="statuschip">NO CHECK</div>
+  </div>
+  <nav id="nav">
+    <button class="on" data-v="today">Today</button>
+    <button data-v="check">Check-in</button>
+    <button data-v="history">History</button>
+    <button data-v="export">Export</button>
+    <button data-v="rules">Rules</button>
+  </nav>
+</header>
+
+<!-- TODAY -->
+<section class="view on" id="today">
+  <label class="f"><span>Session</span>
+    <select class="t" id="daysel"></select></label>
+  <div id="gate"></div>
+  <div id="workout"></div>
+</section>
+
+<!-- CHECK-IN -->
+<section class="view" id="check">
+  <h2>Morning check-in</h2>
+  <p class="sub" id="checkdate">—</p>
+  <div class="grid2">
+    <label class="f"><span>Knee-to-wall R (cm)</span><input class="t" type="number" step="0.5" inputmode="decimal" id="ktwR"></label>
+    <label class="f"><span>Knee-to-wall L (cm)</span><input class="t" type="number" step="0.5" inputmode="decimal" id="ktwL"></label>
+  </div>
+  <div class="grid2">
+    <label class="f"><span>R ankle pain 0–10</span><input class="t" type="number" min="0" max="10" inputmode="numeric" id="anklePain"></label>
+    <label class="f"><span>L tendon pain 0–10</span><input class="t" type="number" min="0" max="10" inputmode="numeric" id="tendonPain"></label>
+  </div>
+  <div class="grid2">
+    <label class="f"><span>AM stiffness (min)</span><input class="t" type="number" min="0" inputmode="numeric" id="amStiff"></label>
+    <label class="f"><span>Ankle swelling?</span>
+      <select class="t" id="swelling"><option value="no">No</option><option value="yes">Yes</option></select></label>
+  </div>
+  <label class="f"><span>Status — set it honestly, it drives today's volume</span>
+    <div class="seg" id="statusseg">
+      <button data-v="green">GREEN</button><button data-v="yellow">YELLOW</button><button data-v="red">RED</button>
+    </div></label>
+  <label class="f"><span>Notes</span><textarea class="t" id="cnotes" placeholder="How the ankle and tendon actually feel…"></textarea></label>
+  <button class="btn" id="savecheck">Save check-in</button>
+  <div class="note" style="margin-top:16px">
+    <b>Green</b> ankle ≤2/10, no swelling, KTW within ~5%; tendon ≤3 loading / ≤2 jumping.<br>
+    <b>Yellow</b> pain 3–4 or rising, mild swelling, KTW down 5–10%.<br>
+    <b>Red</b> pain &gt;4 or sharp, giving-way, new swelling, KTW down &gt;10%.
+  </div>
+</section>
+
+<!-- HISTORY -->
+<section class="view" id="history">
+  <h2>History</h2><p class="sub">Most recent first</p>
+  <div id="histbody"></div>
+</section>
+
+<!-- EXPORT -->
+<section class="view" id="export">
+  <h2>Export</h2>
+  <p class="sub">Paste the text into your coach, or download JSON as a backup.</p>
+  <label class="f"><span>Range</span>
+    <select class="t" id="range">
+      <option value="7">Last 7 days</option><option value="14">Last 14 days</option>
+      <option value="28">Last 28 days</option><option value="9999">Everything</option>
+    </select></label>
+  <button class="btn" id="copybtn">Copy log for coach</button>
+  <button class="btn sec" id="jsonbtn">Download JSON backup</button>
+  <button class="btn sec" id="importbtn">Restore from JSON</button>
+  <input type="file" id="importfile" accept="application/json" hidden>
+  <h3>Preview</h3>
+  <pre class="out" id="preview">—</pre>
+  <button class="btn dgr" id="wipe" style="margin-top:22px">Erase all data on this device</button>
+  <p class="sub" style="margin-top:10px">Everything is stored only in this browser. Nothing is uploaded anywhere.</p>
+</section>
+
+<!-- RULES -->
+<section class="view" id="rules">
+  <h2>Decision rules</h2>
+  <div class="note"><b>Green</b> — run the plan. Progress <b>one</b> variable only.</div>
+  <div class="note warn"><b>Yellow</b> — cut contacts 30–50%, bilateral instead of unilateral, drop load/range 10–20%. Do not progress.</div>
+  <div class="note stop"><b>Red</b> — no jumping, sprinting, hard cutting or loaded end-range. Contact your clinician if it repeats.</div>
+  <h3>Cut in this order</h3>
+  <div class="note">1. Extra conditioning → 2. High-volume extensive contacts → 3. Decel/landing sets basketball already gave you → 4. Accessory sets → 5. Secondary strength → <b>6. Primary heavy strength last.</b></div>
+  <h3>Basketball load</h3>
+  <div class="note">3 sessions/wk is your default: keep primary strength, drop 1 accessory set, cut formal contacts 40–60%.<br>
+  Surprise hard pickup → next lower session is automatically Yellow.</div>
+  <h3>Non-negotiables</h3>
+  <div class="note">Soleus Raise twice a week. Heels Elevated Narrow Squat is the priority lift.
+  No maximal left-foot attempts until the dunk ladder criteria are met.</div>
+  <div class="legend">
+    <span><i style="background:#fff"></i>normal</span>
+    <span><i style="background:var(--superset)"></i>superset</span>
+    <span><i style="background:var(--circuit)"></i>circuit</span>
+    <span><i style="background:var(--opt)"></i>optional</span>
+  </div>
+</section>
+
+</div>
+
+<div class="timer" id="timer"><span id="tleft">0:00</span><button id="tadd">+30s</button><button id="tstop">Stop</button></div>
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){});});
+}
+</script>
+</body>
+</html>
