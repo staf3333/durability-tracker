@@ -13,7 +13,7 @@ var T = {
     note: 'Your one genuinely heavy day. If time runs out, cut accessories — never the squat.',
     blocks: [
       { title: 'Block 1 · Prep circuit — 15–18 min', style: 'circuit', ex: [
-        { id:'nasal', n:'Nasal Breathing Cardio Warm Up', l:'nasal-breathing-cardio-warm-up', s:1, t:'3:00' },
+        { id:'nasal', n:'Nasal Breathing Cardio Warm Up', l:'nasal-breathing-cardio-warm-up', s:1, t:'3:00', tm:180 },
         { id:'sslhr', n:'Split Stance Loaded Hip Rotations', l:'split-stance-loaded-hip-rotations', s:1, t:'5 ea', d:'5–15 lb · all 4 configs = 1 set' },
         { id:'hhar', n:'Hip Hinge Ankle Rocker', l:'hip-hinge-ankle-rocker', s:1, t:'8 ea', d:'No pinch at end range' },
         { id:'ccgb', n:'Cross Connect Glute Bridge', l:'cross-connect-glute-bridge', s:1, t:'5 ea' },
@@ -23,7 +23,7 @@ var T = {
       ]},
       { title: 'Block 2 · Locomotion & elasticity — 8–10 min', style:'', ex: [
         { id:'erir', n:'Hip Mobility ER/IR Skips', l:'hip-mobility-er-ir-skips', s:2, t:'20 yds', rest:30 },
-        { id:'metro2', n:'2 Leg Metronome Plyo Progressions', l:'2-leg-metronome-plyo-progressions', s:2, t:'0:10', d:'110–120 bpm · regressed from Dot Drill', rest:60 },
+        { id:'metro2', n:'2 Leg Metronome Plyo Progressions', l:'2-leg-metronome-plyo-progressions', s:2, t:'0:10', d:'110–120 bpm · regressed from Dot Drill', rest:60, tm:10 },
         { id:'ekdj', n:'Extensive Knee Dominant Jump', l:'extensive-knee-dominant-jump', s:2, t:'6', d:'50–60% effort · ~50 contacts total today', rest:60 }
       ]},
       { title: 'Block 3 · Shooting — 50–55 min', style:'', ex: [
@@ -56,7 +56,7 @@ var T = {
       { title:'Daily microdose — 8–12 min', style:'circuit', ex:[
         { id:'ktw', n:'Knee-to-wall check', s:1, t:'3 ea', d:'Log it on the Check-in tab' },
         { id:'banddf', n:'Band-distraction dorsiflexion', s:2, t:'8', side:'R', d:'Gentle — stop before pinch' },
-        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:1, t:'0:20 ea dir' },
+        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:1, t:'0:20 ea dir', tm:20 },
         { id:'bands', n:'Band walks + marches', s:1, t:'5 yds', d:'Neutral and externally rotated' }
       ]},
       { title:'After work', style:'', ex:[
@@ -72,7 +72,7 @@ var T = {
     blocks: [
       { title:'Primer · before basketball — 15–20 min', style:'', ex:[
         { id:'hhar', n:'Hip Hinge Ankle Rocker', l:'hip-hinge-ankle-rocker', s:2, t:'8 ea', rest:30 },
-        { id:'mdecel', n:'Metronome Decels', l:'metronome-decels', s:2, t:'0:15', d:'Slow cadence · quiet, balanced stops', rest:60 },
+        { id:'mdecel', n:'Metronome Decels', l:'metronome-decels', s:2, t:'0:15', d:'Slow cadence · quiet, balanced stops', rest:60, tm:15 },
         { id:'sss', n:'Split Stance Switch & Stick', l:'split-stance-switch-stick', s:2, t:'3 ea', d:'Hold each landing 2 sec', rest:45 },
         { id:'pogo', n:'Bilateral pogos', l:'scalable-impact-durability', s:2, t:'10', d:'Only if ankle AND tendon are Green', opt:1, rest:60 }
       ]},
@@ -83,8 +83,8 @@ var T = {
         { id:'slfrsd', n:'Single Leg Full Range Step Downs', l:'single-leg-full-range-step-downs-or-leg-press', s:3, t:'6–8 ea', w:1, d:'RPE 6–7 — lighter than Monday by design', rest:90 },
         { id:'soleus', n:'Soleus Raise', l:'soleus-raise-paulfabritz', s:3, t:'8–12 ea', w:1, d:'2nd soleus exposure of the week', flag:'pri', rest:60 },
         { id:'calf', n:'Straight-knee calf raise', s:2, t:'8–12 ea', w:1, d:'Full height, 2-sec lower', rest:60 },
-        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:2, t:'0:20–0:30 ea dir', d:'Very light — 2.5–5 lb', rest:30 },
-        { id:'cope', n:'Copenhagen Side Plank', l:'copenhagen-side-plank-paulfabritz', s:2, t:'0:20–0:25 ea', rest:45 }
+        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:2, t:'0:20–0:30 ea dir', d:'Very light — 2.5–5 lb', rest:30 , tm:30},
+        { id:'cope', n:'Copenhagen Side Plank', l:'copenhagen-side-plank-paulfabritz', s:2, t:'0:20–0:25 ea', rest:45, tm:25 }
       ]}
     ]
   },
@@ -95,13 +95,13 @@ var T = {
     note: 'Recovery session, not a third leg day. Start the inversion and toe work light — irritated sheaths flare.',
     blocks: [
       { title:'Microdose', style:'circuit', ex:[
-        { id:'roll', n:'Optional Foam Roll Circuit', l:'optional-foam-roll-circuit', s:1, t:'0:20–0:30 ea', opt:1 },
+        { id:'roll', n:'Optional Foam Roll Circuit', l:'optional-foam-roll-circuit', s:1, t:'0:20–0:30 ea', opt:1, tm:30 },
         { id:'bandf', n:'Band-distraction dorsiflexion', s:2, t:'8', side:'R' },
-        { id:'slantiso', n:'Slant Board Isometric Progressions', l:'slant-board-isometric-progressions', s:2, t:'0:30–0:45', d:'Tendon symptom modulation' },
+        { id:'slantiso', n:'Slant Board Isometric Progressions', l:'slant-board-isometric-progressions', s:2, t:'0:30–0:45', d:'Tendon symptom modulation', tm:45 },
         { id:'inv', n:'Resisted inversion', s:2, t:'12–15', side:'R', d:'NEW · posterior tib · lightest band, slow' },
         { id:'toe', n:'Great-toe flexion press', s:2, t:'10', side:'R', d:'NEW · FHL · 3-sec holds' },
-        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:2, t:'0:20–0:30 ea dir' },
-        { id:'toemc', n:'Toe Motor Control', l:'toe-motor-control', s:1, t:'0:45' },
+        { id:'circles', n:'Resisted Ankle Circles', l:'resisted-ankle-circles', s:2, t:'0:20–0:30 ea dir' , tm:30},
+        { id:'toemc', n:'Toe Motor Control', l:'toe-motor-control', s:1, t:'0:45', tm:45 },
         { id:'chfd', n:'Cable Rotation Hip Flexor Drive', l:'cable-rotation-hip-flexor-drive', s:2, t:'8 ea' },
         { id:'bands', n:'Band walks + marches', s:2, t:'5 yds / 8–10 ea' }
       ]},
@@ -240,9 +240,25 @@ DAYS.forEach(function (d) {
   var o = document.createElement('option'); o.value = d[0]; o.textContent = d[1]; sel.appendChild(o);
 });
 sel.value = curDay;
+function sessionHasData(k) {
+  var s = state.sessions[k];
+  if (!s) return false;
+  if (s.readiness) return true;
+  if (s.notes) return true;
+  return Object.keys(s.ex || {}).some(function (id) {
+    return (s.ex[id] || []).some(function (r) { return r.done || r.r || r.w; });
+  });
+}
 sel.addEventListener('change', function () {
+  var s = state.sessions[curKey];
+  if (s && s.day && s.day !== sel.value && sessionHasData(curKey)) {
+    if (!confirm('You have already logged a "' + ((T[s.day] && T[s.day].name) || s.day) +
+                 '" session today.\n\nSwitching will re-label that log as "' +
+                 ((T[sel.value] && T[sel.value].name) || sel.value) + '". Continue?')) {
+      sel.value = s.day; return;
+    }
+  }
   curDay = sel.value;
-  var s = sess(curKey, false);
   if (s) { s.day = curDay; save(); }
   renderWorkout();
 });
@@ -277,23 +293,48 @@ function renderGate() {
 }
 
 /* ---------- workout render ---------- */
-function renderWorkout() {
-  paintStatus(); renderGate();
-  var tpl = T[curDay], host = el('workout');
-  var h = '<h2>' + esc(tpl.name) + '</h2><p class="sub">' + esc(tpl.sub) + '</p>';
-  h += '<div class="note">' + esc(tpl.note) + '</div>';
+function isGrouped(b) { return b.style === 'superset' || b.style === 'circuit'; }
+function roundsIn(b) {
+  var n = 1;
+  b.ex.forEach(function (x) { n = Math.max(n, getSets(x.id, x.s).length); });
+  return n;
+}
+function blockIndexOf(exId) {
+  var bi = -1;
+  T[curDay].blocks.forEach(function (b, i) {
+    b.ex.forEach(function (x) { if (x.id === exId) bi = i; });
+  });
+  return bi;
+}
+function exLabel(x) {
+  var name = x.l ? '<a href="' + P + x.l + '/" target="_blank" rel="noopener">' + esc(x.n) + '</a>' : esc(x.n);
+  var flag = x.flag === 'pri' ? '<span class="flag pri">PRIORITY</span>' : '';
+  var side = x.side ? '<span class="flag ' + x.side.toLowerCase() + '">' + x.side + '</span>' : '';
+  return name + flag + side;
+}
 
-  tpl.blocks.forEach(function (b) {
-    h += '<h3>' + esc(b.title) + '</h3>';
+/* one row of inputs for exercise x, set index i — shared by straight sets and rounds */
+function rowInner(x, i, r) {
+  var live = ST.ex === x.id && ST.i === i, h = '';
+  if (x.tm) {
+    h += '<button class="stimer' + (live && ST.running ? ' run' : (live ? ' hold' : '')) +
+         '" data-f="tmr" data-sec="' + x.tm + '">' +
+         (live ? (ST.running ? '❚❚ ' : '▶ ') + fmtSec(ST.remain) : '▶ ' + fmtSec(x.tm)) + '</button>';
+  }
+  h += '<input inputmode="numeric" placeholder="' + (x.tm ? 'time' : 'reps') +
+       '" value="' + esc(r.r) + '" data-f="r">';
+  if (x.w) h += '<input inputmode="decimal" placeholder="lb" value="' + esc(r.w) + '" data-f="w">';
+  h += '<button class="tick' + (r.done ? ' on' : '') + '" data-f="done">✓</button>';
+  return h;
+}
+
+function blockHTML(b, bi) {
+  var h = '<div class="blk" data-b="' + bi + '"><h3>' + esc(b.title) + '</h3>';
+
+  if (!isGrouped(b)) {
     b.ex.forEach(function (x) {
-      var cls = x.opt ? 'optional' : (b.style || '');
-      var name = x.l
-        ? '<a href="' + P + x.l + '/" target="_blank" rel="noopener">' + esc(x.n) + '</a>'
-        : esc(x.n);
-      var flag = x.flag === 'pri' ? '<span class="flag pri">PRIORITY</span>' : '';
-      var side = x.side ? '<span class="flag ' + x.side.toLowerCase() + '">' + x.side + '</span>' : '';
-      h += '<div class="ex ' + cls + '" data-ex="' + x.id + '">';
-      h += '<div class="exhead"><div class="exname"><b>' + name + flag + side + '</b>' +
+      h += '<div class="ex ' + (x.opt ? 'optional' : '') + '" data-ex="' + x.id + '">';
+      h += '<div class="exhead"><div class="exname"><b>' + exLabel(x) + '</b>' +
            (x.d ? '<small>' + esc(x.d) + '</small>' : '') + '</div>' +
            '<div class="target"><b>' + esc(x.t) + '</b>' + (x.s > 1 ? x.s + ' sets' : '') + '</div></div>';
       h += '<div class="sets" data-sets="' + x.id + '"></div>';
@@ -301,7 +342,69 @@ function renderWorkout() {
       if (x.rest) h += '<button class="mini" data-rest="' + x.rest + '">rest ' + fmtSec(x.rest) + '</button>';
       h += '</div></div>';
     });
+    return h + '</div>';
+  }
+
+  /* grouped: superset / circuit — logged round by round, the way it's executed */
+  var rounds = roundsIn(b);
+  var rest = 0;
+  b.ex.forEach(function (x) { if (x.rest) rest = Math.max(rest, x.rest); });
+
+  h += '<div class="grp ' + b.style + '">';
+  h += '<div class="ghead">' + (b.style === 'superset' ? 'SUPERSET' : 'CIRCUIT') +
+       ' · ' + rounds + (rounds === 1 ? ' round' : ' rounds') +
+       '<small>' + (b.style === 'superset'
+         ? 'Alternate the exercises, rest after each round'
+         : 'One pass through, minimal rest between') + '</small></div>';
+
+  h += '<ul class="glist">';
+  b.ex.forEach(function (x) {
+    h += '<li><b>' + exLabel(x) + '</b> <em>' + x.s + ' × ' + esc(x.t) + '</em>' +
+         (x.d ? '<small>' + esc(x.d) + '</small>' : '') + '</li>';
   });
+  h += '</ul>';
+
+  for (var r = 0; r < rounds; r++) {
+    var members = b.ex.filter(function (x) { return getSets(x.id, x.s).length > r; });
+    var allDone = members.length > 0 && members.every(function (x) { return getSets(x.id, x.s)[r].done; });
+    h += '<div class="round' + (allDone ? ' done' : '') + '" data-r="' + r + '">';
+    h += '<div class="rlab">Round ' + (r + 1) +
+         (members.length < b.ex.length ? ' <em>· ' + members.map(function (m) { return m.n; }).join(' only') + '</em>' : '') +
+         '</div>';
+    members.forEach(function (x) {
+      var rows = getSets(x.id, x.s);
+      h += '<div class="setrow grow" data-ex="' + x.id + '" data-i="' + r + '">';
+      h += '<span class="gname">' + esc(x.n) + (x.side ? ' <span class="flag ' + x.side.toLowerCase() + '">' + x.side + '</span>' : '') + '</span>';
+      h += rowInner(x, r, rows[r]);
+      h += '</div>';
+    });
+    if (rest) h += '<div class="rrest"><button class="mini" data-rest="' + rest + '">rest ' + fmtSec(rest) + '</button></div>';
+    h += '</div>';
+  }
+
+  h += '<div class="exbtns"><button class="mini" data-around="' + bi + '">+ round</button>' +
+       '<button class="mini" data-rmround="' + bi + '">− round</button></div>';
+  return h + '</div></div>';
+}
+
+function renderBlock(bi) {
+  var host = document.querySelector('.blk[data-b="' + bi + '"]');
+  if (!host) return;
+  var b = T[curDay].blocks[bi];
+  var tmp = document.createElement('div');
+  tmp.innerHTML = blockHTML(b, bi);
+  host.replaceWith(tmp.firstChild);
+  if (!isGrouped(b)) b.ex.forEach(function (x) { renderSets(x); });
+}
+
+function renderWorkout() {
+  stopSetTimer(true);
+  paintStatus(); renderGate();
+  var tpl = T[curDay], host = el('workout');
+  var h = '<h2>' + esc(tpl.name) + '</h2><p class="sub">' + esc(tpl.sub) + '</p>';
+  h += '<div class="note">' + esc(tpl.note) + '</div>';
+
+  tpl.blocks.forEach(function (b, bi) { h += blockHTML(b, bi); });
 
   h += '<h3>Session notes</h3><textarea class="t" id="snotes" placeholder="Basketball minutes, RPE, how it felt…"></textarea>';
   host.innerHTML = h;
@@ -313,7 +416,7 @@ function renderWorkout() {
   });
 
   tpl.blocks.forEach(function (b) {
-    b.ex.forEach(function (x) { renderSets(x); });
+    if (!isGrouped(b)) b.ex.forEach(function (x) { renderSets(x); });
   });
 }
 
@@ -335,19 +438,70 @@ function findEx(exId) {
 }
 
 function renderSets(x) {
+  var bi = blockIndexOf(x.id);
+  if (bi >= 0 && isGrouped(T[curDay].blocks[bi])) { renderBlock(bi); return; }
   var host = document.querySelector('[data-sets="' + x.id + '"]');
   if (!host) return;
   var rows = getSets(x.id, x.s), h = '';
   rows.forEach(function (r, i) {
-    h += '<div class="setrow" data-i="' + i + '">';
-    h += '<span class="n">' + (i + 1) + '</span>';
-    h += '<input inputmode="numeric" placeholder="reps/time" value="' + esc(r.r) + '" data-f="r">';
-    if (x.w) h += '<input inputmode="decimal" placeholder="lb" value="' + esc(r.w) + '" data-f="w">';
-    h += '<button class="tick' + (r.done ? ' on' : '') + '" data-f="done">✓</button>';
-    h += '<button class="rm" data-f="rm">×</button>';
-    h += '</div>';
+    h += '<div class="setrow" data-i="' + i + '"><span class="n">' + (i + 1) + '</span>';
+    h += rowInner(x, i, r);
+    h += '<button class="rm" data-f="rm">×</button></div>';
   });
   host.innerHTML = h;
+}
+
+/* ---------- per-set work timer (counts the set down, like the PJF app) ---------- */
+var ST = { ex: null, i: null, end: 0, remain: 0, running: false, h: null, sec: 0 };
+
+function setTimerBtn() {
+  if (ST.ex === null) return null;
+  return document.querySelector('.setrow[data-ex="' + ST.ex + '"][data-i="' + ST.i + '"] .stimer')
+      || document.querySelector('.ex[data-ex="' + ST.ex + '"] .setrow[data-i="' + ST.i + '"] .stimer');
+}
+function stopSetTimer(clear) {
+  clearInterval(ST.h); ST.h = null; ST.running = false;
+  if (clear) { ST.ex = null; ST.i = null; ST.remain = 0; }
+}
+function toggleSetTimer(exId, i, sec) {
+  var same = ST.ex === exId && ST.i === i;
+  if (same && ST.running) {                     // pause
+    ST.remain = Math.max(0, Math.round((ST.end - Date.now()) / 1000));
+    stopSetTimer(false);
+    paintSetTimer();
+    return;
+  }
+  if (!same) {                                  // switching sets — reset
+    stopSetTimer(true);
+    ST.ex = exId; ST.i = i; ST.sec = sec; ST.remain = sec;
+  }
+  ST.end = Date.now() + ST.remain * 1000;
+  ST.running = true;
+  clearInterval(ST.h);
+  ST.h = setInterval(tickSet, 200);
+  tickSet();
+}
+function paintSetTimer() {
+  var b = setTimerBtn(); if (!b) return;
+  b.textContent = (ST.running ? '❚❚ ' : '▶ ') + fmtSec(ST.remain);
+  b.classList.toggle('run', ST.running);
+  b.classList.toggle('hold', !ST.running && ST.remain < ST.sec);
+}
+function tickSet() {
+  ST.remain = Math.max(0, Math.round((ST.end - Date.now()) / 1000));
+  if (ST.remain <= 0) {
+    var exId = ST.ex, i = ST.i, sec = ST.sec;
+    stopSetTimer(false);
+    var rows = getSets(exId, 0);
+    if (rows[i]) { rows[i].r = fmtSec(sec); rows[i].done = true; save(); }
+    if (navigator.vibrate) navigator.vibrate([200, 90, 200]);
+    var x = findEx(exId);
+    ST.ex = null; ST.i = null; ST.remain = 0;
+    if (x) { renderSets(x); markDone(exId, rows); if (x.rest) startTimer(x.rest); }
+    toast('Set complete');
+    return;
+  }
+  paintSetTimer();
 }
 
 el('workout').addEventListener('click', function (e) {
@@ -357,13 +511,29 @@ el('workout').addEventListener('click', function (e) {
     getSets(b.dataset.add, 0).push({ r:'', w:'', done:false });
     save(); renderSets(findEx(b.dataset.add)); return;
   }
+  if (b.dataset.around) {
+    var gb = T[curDay].blocks[+b.dataset.around];
+    gb.ex.forEach(function (x) { getSets(x.id, x.s).push({ r:'', w:'', done:false }); });
+    save(); renderBlock(+b.dataset.around); return;
+  }
+  if (b.dataset.rmround) {
+    var rb = T[curDay].blocks[+b.dataset.rmround];
+    if (roundsIn(rb) <= 1) { toast('Keep at least one round'); return; }
+    rb.ex.forEach(function (x) {
+      var rows = getSets(x.id, x.s);
+      if (rows.length > 1) rows.pop();
+    });
+    save(); renderBlock(+b.dataset.rmround); return;
+  }
   if (b.dataset.rest) { startTimer(+b.dataset.rest); return; }
 
   var exId = b.closest('[data-ex]') && b.closest('[data-ex]').dataset.ex;
   var row = b.closest('.setrow'); if (!exId || !row) return;
   var i = +row.dataset.i, rows = getSets(exId, 0);
 
-  if (b.dataset.f === 'done') {
+  if (b.dataset.f === 'tmr') {
+    toggleSetTimer(exId, i, +b.dataset.sec);
+  } else if (b.dataset.f === 'done') {
     rows[i].done = !rows[i].done; save();
     b.classList.toggle('on', rows[i].done);
     markDone(exId, rows);
@@ -382,8 +552,17 @@ el('workout').addEventListener('input', function (e) {
 });
 
 function markDone(exId, rows) {
-  var card = document.querySelector('[data-ex="' + exId + '"]');
+  var card = document.querySelector('.ex[data-ex="' + exId + '"]');
   if (card) card.classList.toggle('done', rows.length > 0 && rows.every(function (r) { return r.done; }));
+  var bi = blockIndexOf(exId);
+  if (bi >= 0 && isGrouped(T[curDay].blocks[bi])) {
+    var b = T[curDay].blocks[bi];
+    [].forEach.call(document.querySelectorAll('.blk[data-b="' + bi + '"] .round'), function (rd) {
+      var r = +rd.dataset.r;
+      var mem = b.ex.filter(function (x) { return getSets(x.id, x.s).length > r; });
+      rd.classList.toggle('done', mem.length > 0 && mem.every(function (x) { return getSets(x.id, x.s)[r].done; }));
+    });
+  }
 }
 
 /* ---------- rest timer ---------- */
@@ -508,9 +687,13 @@ function buildText(days) {
   return out.join('\n');
 }
 function nameFor(day, id) {
-  var found = null, tpl = T[day];
-  if (!tpl) return null;
-  tpl.blocks.forEach(function (b) { b.ex.forEach(function (x) { if (x.id === id) found = x.n; }); });
+  var found = null;
+  function scan(tpl) {
+    if (!tpl || found) return;
+    tpl.blocks.forEach(function (b) { b.ex.forEach(function (x) { if (x.id === id && !found) found = x.n; }); });
+  }
+  scan(T[day]);
+  if (!found) Object.keys(T).forEach(function (k) { scan(T[k]); });
   return found;
 }
 function renderPreview() { el('preview').textContent = buildText(+el('range').value); }

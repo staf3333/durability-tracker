@@ -33,31 +33,44 @@ findings or personal training data is committed here.
 
 It runs offline after the first load, so a gym with no signal is fine.
 
+## Stack
+
+React + TypeScript + Vite, with `vite-plugin-pwa` for the offline service
+worker. See [ARCHITECTURE.md](ARCHITECTURE.md) for why it is built this way.
+
+```bash
+npm install
+npm run dev      # local dev server
+npm test         # 23 assertions
+npm run build    # production build into dist/
+```
+
+Pushing to `main` runs the tests and deploys to GitHub Pages automatically.
+
 ## Files
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `index.html` | Markup, styles, view shell |
-| `app.js` | Session templates, state, logging, export |
-| `sw.js` | Service worker — network-first with cache fallback |
-| `manifest.webmanifest` | Home-screen install metadata |
+| `src/data/templates.ts` | Every session, block and exercise |
+| `src/types.ts` | Shared types |
+| `src/state/store.tsx` | Reducer, persistence, v1 migration |
+| `src/lib/plan.ts` | Derived helpers and log export |
+| `src/components/` | Views, blocks, set rows, timers |
+| `legacy/` | The original vanilla build, kept for reference |
 
 ## Updating the plan
 
-Session templates live in the `T` object at the top of `app.js`. Each exercise
-takes:
+Session content lives in `src/data/templates.ts`:
 
-```js
-{ id:'soleus', n:'Soleus Raise', l:'soleus-raise-paulfabritz',
-  s:3, t:'8–12 ea', w:1, d:'note shown under the name',
-  flag:'pri', side:'R', opt:1, rest:60 }
+```ts
+{ id: 'soleus', name: 'Soleus Raise', slug: 'soleus-raise-paulfabritz',
+  sets: 3, target: '8–12 ea', weight: true, note: 'shown under the name',
+  priority: true, side: 'R', rest: 60, seconds: 45 }
 ```
 
-`id` is the storage key — changing it orphans existing logs. `l` is the PJF
-exercise slug, `s` the default number of set rows, `t` the target text, `w`
-enables a weight field, `rest` is the timer in seconds.
-
-After changing any file, bump `CACHE` in `sw.js` so installed clients pick it up.
+`id` is the storage key — changing it orphans existing logs. `slug` is the PJF
+exercise path, `seconds` turns the set into a countdown, `rest` sets the rest
+timer, and `weight` adds a load field.
 
 ## Credit
 

@@ -1,3 +1,5 @@
-*.json
-!manifest.webmanifest
+node_modules
+dist
+*.local
 .DS_Store
+durability-*.json

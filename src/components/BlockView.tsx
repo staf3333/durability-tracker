@@ -1,0 +1,128 @@
+import type { Block, Session } from '../types';
+import { fmtSec, membersInRound, roundsIn, setsOf } from '../lib/plan';
+import { ExerciseLabel, SetRow } from './SetRow';
+import type { TimerState } from './Timers';
+
+interface Props {
+  block: Block;
+  session: Session | undefined;
+  timer: TimerState | null;
+  onField: (exId: string, i: number, f: 'reps' | 'load', v: string) => void;
+  onToggle: (exId: string, i: number) => void;
+  onTimer: (exId: string, i: number, seconds: number) => void;
+  onAddSet: (exId: string, defaults: number) => void;
+  onRemoveSet: (exId: string, i: number) => void;
+  onAddRound: (block: Block) => void;
+  onRemoveRound: (block: Block) => void;
+  onRest: (seconds: number) => void;
+}
+
+export function BlockView(p: Props) {
+  const { block, session, timer } = p;
+
+  if (block.mode === 'straight') {
+    return (
+      <div className="blk">
+        <h3>{block.title}</h3>
+        {block.exercises.map((ex) => {
+          const sets = setsOf(session, ex);
+          const allDone = sets.length > 0 && sets.every((s) => s.done);
+          return (
+            <div key={ex.id} className={`ex${ex.optional ? ' optional' : ''}${allDone ? ' done' : ''}`} data-ex={ex.id}>
+              <div className="exhead">
+                <div className="exname">
+                  <b><ExerciseLabel ex={ex} /></b>
+                  {ex.note && <small>{ex.note}</small>}
+                </div>
+                <div className="target">
+                  <b>{ex.target}</b>
+                  {ex.sets > 1 && `${ex.sets} sets`}
+                </div>
+              </div>
+              <div className="sets">
+                {sets.map((entry, i) => (
+                  <SetRow
+                    key={i}
+                    ex={ex} index={i} entry={entry} timer={timer}
+                    onField={(f, v) => p.onField(ex.id, i, f, v)}
+                    onToggle={() => p.onToggle(ex.id, i)}
+                    onTimer={() => p.onTimer(ex.id, i, ex.seconds ?? 0)}
+                    onRemove={() => p.onRemoveSet(ex.id, i)}
+                  />
+                ))}
+              </div>
+              <div className="exbtns">
+                <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ set</button>
+                {ex.rest && <button className="mini" onClick={() => p.onRest(ex.rest!)}>rest {fmtSec(ex.rest)}</button>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // superset / circuit — logged round by round, the way it is actually executed
+  const rounds = roundsIn(block, session);
+  const rest = block.exercises.reduce((m, ex) => Math.max(m, ex.rest ?? 0), 0);
+
+  return (
+    <div className="blk">
+      <h3>{block.title}</h3>
+      <div className={`grp ${block.mode}`}>
+        <div className="ghead">
+          {block.mode === 'superset' ? 'SUPERSET' : 'CIRCUIT'} · {rounds} {rounds === 1 ? 'round' : 'rounds'}
+          <small>
+            {block.mode === 'superset'
+              ? 'Alternate the exercises, rest after each round'
+              : 'One pass through, minimal rest between'}
+          </small>
+        </div>
+
+        <ul className="glist">
+          {block.exercises.map((ex) => (
+            <li key={ex.id}>
+              <b><ExerciseLabel ex={ex} /></b>
+              <em>{ex.sets} × {ex.target}</em>
+              {ex.note && <small>{ex.note}</small>}
+            </li>
+          ))}
+        </ul>
+
+        {Array.from({ length: rounds }, (_, r) => {
+          const members = membersInRound(block, session, r);
+          const allDone = members.length > 0 && members.every((ex) => setsOf(session, ex)[r].done);
+          const partial = members.length < block.exercises.length;
+          return (
+            <div key={r} className={`round${allDone ? ' done' : ''}`} data-r={r}>
+              <div className="rlab">
+                Round {r + 1}
+                {partial && <em> · {members.map((m) => m.name).join(' only')}</em>}
+              </div>
+              {members.map((ex) => (
+                <SetRow
+                  key={ex.id}
+                  grouped
+                  ex={ex} index={r} entry={setsOf(session, ex)[r]} timer={timer}
+                  onField={(f, v) => p.onField(ex.id, r, f, v)}
+                  onToggle={() => p.onToggle(ex.id, r)}
+                  onTimer={() => p.onTimer(ex.id, r, ex.seconds ?? 0)}
+                />
+              ))}
+              {rest > 0 && (
+                <div className="rrest">
+                  <button className="mini" onClick={() => p.onRest(rest)}>rest {fmtSec(rest)}</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        <div className="exbtns">
+          <button className="mini" onClick={() => p.onAddRound(block)}>+ round</button>
+          <button className="mini" onClick={() => p.onRemoveRound(block)}>− round</button>
+        </div>
+      </div>
+    </div>
+  );
+}
