@@ -263,7 +263,8 @@ describe('session relabelling guard', () => {
 describe('export', () => {
   it('resolves exercise names across templates and never emits a raw id', () => {
     const store: Store = {
-      version: 2,
+      version: 3,
+      history: {},
       sessions: {
         '2026-09-15': {
           day: 'wed',
