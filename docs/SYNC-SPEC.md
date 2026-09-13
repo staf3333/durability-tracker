@@ -594,6 +594,7 @@ deliberate — see §15, Gap 3.
 | **P4** | Hosting cutover, custom domain, data migration | Medium | No |
 | **P5** | Plan-as-data: templates move to storage, versioned | High | **No — after Block 1 is running** |
 | **P6** | Proposals + coach notes; coach read access via RBAC | Medium | No |
+| **P7** | *(Deferred)* Generalise to multi-programme hub, rename, exercise library | High | Not until after Block 3 |
 
 P0 is worth landing tonight: it is pure client-side schema work, fully covered
 by tests, and it unblocks everything else. P2–P4 are weekend work.
@@ -649,3 +650,4 @@ the case that unit tests will not catch.
 | 12 Sep | Coach proposes, never mutates | Rehab prescriptions govern healing tissue; silent AI edits are the failure mode to design out |
 | 12 Sep | Plan becomes data, but only at P5 | Right architecture, wrong week — do not change the delivery mechanism while starting the programme |
 | 12 Sep | Coach reads direct, writes via API | Direct reads add no auth surface; direct writes would bypass upsert and conflict rules |
+| 12 Sep | **Generalising to a multi-programme fitness hub is deferred** until athletic performance is restored | The rename and the `Program -> Session -> Block` model are real work with no near-term payoff. Nothing built for sync is programme-specific, so deferring costs nothing. Revisit after Block 3. |
