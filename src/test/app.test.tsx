@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { TEMPLATES } from '../data/templates';
 import { hydrate, reducer, emptyStore, emptySync } from '../state/store';
-import type { Action } from '../state/store';
 import { buildText, nameFor } from '../lib/plan';
 import type { Store } from '../types';
 
