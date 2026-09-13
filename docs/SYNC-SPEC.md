@@ -505,7 +505,85 @@ which is most of the value.
 
 ---
 
-## 16. Phased plan
+## 16. User flows
+
+What the system is actually for. Written as the flow exists **today**, with the
+friction each phase removes.
+
+### 16.1 Daily — training day
+
+| When | Step | Surface | Today |
+|---|---|---|---|
+| Wake | Morning check-in: knee-to-wall L/R, ankle, tendon, AM stiffness, swelling → Green/Yellow/Red | Tracker, Check-in tab | ✅ works |
+| | Gate advice appears on Today | Tracker | ✅ works |
+| Session | Work through blocks; steppers for load, timers for held sets | Tracker, Today tab | ✅ works |
+| | "Last time" shows prior loads so nothing is recalled from memory | Tracker | ✅ works |
+| After | Session note: basketball minutes, RPE, how it felt | Tracker | ✅ works |
+| Later | Copy log → paste to coach → it reflects back and says one thing about next session | Export tab → agent | ⚠️ manual |
+
+Roughly 3 minutes of check-in, then the session itself.
+
+### 16.2 The asymmetry that shapes the daily loop
+
+The morning check-in is **not only a gate for today. It is the grade for
+yesterday.** The tendon reports on the following morning rather than during the
+session, so a clean during-session score never clears a session on its own.
+
+The data model already supports this — check-ins are per-date, so Tuesday's
+reading is implicitly the verdict on Monday. **The UI does not say so.** The
+check-in screen should show yesterday's session summary beside the inputs, so
+the number is entered while looking at what caused it.
+
+Cheap to build, and it is the difference between logging a number and closing a
+feedback loop.
+
+### 16.3 Weekly
+
+| When | Step | Surface | Today |
+|---|---|---|---|
+| Sun or Mon | Export last 7 days → weekly review | Export → agent | ⚠️ manual |
+| | Coach checks: KTW trend, pain trend, soleus hit twice, primary lift progressed, basketball count vs hard sessions | Agent | ✅ works |
+| | Verdict: progress one variable / hold / deload | Agent | ✅ works |
+| | Apply the verdict to next week | **Your memory** | ❌ nothing carries it |
+
+That last row is the broken one. The coach reaches a decision and there is no
+path for it to reach the app.
+
+### 16.4 Every four weeks
+
+Testing checkpoint on a low-load day: knee-to-wall, single-leg calf raises,
+bent-knee soleus, hop symmetry, standardised tendon test, and the jump battery.
+Results go in as a session; the coach compares against the previous checkpoint
+and decides block progression.
+
+### 16.5 Friction, and what removes it
+
+| # | Friction | Cost | Fixed by |
+|---|---|---|---|
+| 1 | Coach decisions do not reach the app | **High** — breaks the loop | P5 + P6 |
+| 2 | Copy/paste to hand the coach the log | Medium | P6 (direct read) |
+| 3 | Data lives on one device | Medium | P1–P4 |
+| 4 | Check-in does not show what it is grading | Low, high value | Small UI change |
+| 5 | Nothing prompts the morning check-in | Low | Notification or habit |
+| 6 | Plan lives in two places — HTML doc and tracker | Low | P5 absorbs it |
+
+### 16.6 The flow once P5 and P6 land
+
+```
+morning    check-in (shows yesterday's session)  →  Green/Yellow/Red
+           app applies today's prescription, already adjusted by any accepted proposal
+session    log sets; syncs in the background
+evening    coach reads the log directly — no paste
+weekly     coach posts a proposal: "hold squat at 75, soleus to 40"
+           app surfaces it on Today; you accept or reject; reasoning is kept
+```
+
+The human stays in the loop at exactly one point: accepting the change. That is
+deliberate — see §15, Gap 3.
+
+---
+
+## 17. Phased plan
 
 | Phase | Work | Risk | Can ship before Monday? |
 |---|---|---|---|
@@ -527,7 +605,7 @@ four weeks of clean logs first.
 
 ---
 
-## 17. Testing
+## 18. Testing
 
 **Unit** — reducer purity under the new schema; v1→v4 and v3→v4 migration;
 conflict resolution as a pure function over (local, remote).
@@ -542,7 +620,7 @@ the case that unit tests will not catch.
 
 ---
 
-## 18. Open questions
+## 19. Open questions
 
 1. **Custom domain?** Avoids ever moving the URL again. Needs a domain — do you
    own one, or want one?
@@ -555,7 +633,7 @@ the case that unit tests will not catch.
    writes go through `/api` so they obey the upsert and conflict rules.
 5. **Do we want P0 tonight** and the rest after baselines?
 
-## 19. Decision log
+## 20. Decision log
 
 | Date | Decision | Why |
 |---|---|---|
