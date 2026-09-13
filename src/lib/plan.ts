@@ -133,3 +133,22 @@ export function buildText(store: Store, days: number) {
   }
   return out.join('\n');
 }
+
+/** The most recent session before `date` that has anything logged. */
+export function previousSession(store: Store, date: string) {
+  const keys = Object.keys(store.sessions).filter((k) => k < date).sort().reverse();
+  for (const k of keys) {
+    const s = store.sessions[k];
+    if (s.deletedAt) continue;
+    const sets = Object.values(s.exercises).flat();
+    if (sets.some((x) => x.done || x.reps || x.load) || s.notes) {
+      return {
+        date: k,
+        session: s,
+        setsDone: sets.filter((x) => x.done).length,
+        volume: sessionVolume(s),
+      };
+    }
+  }
+  return null;
+}

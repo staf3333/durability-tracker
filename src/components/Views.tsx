@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Readiness, Status, Store } from '../types';
 import { TEMPLATES } from '../data/templates';
 import { useStore, emptyStore } from '../state/store';
-import { buildText, fmtDate } from '../lib/plan';
+import { buildText, fmtDate, previousSession } from '../lib/plan';
 
 const num = (v: string) => (v === '' ? null : Number(v));
 
@@ -38,10 +38,27 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
     setTimeout(() => setMsg(''), 1800);
   }
 
+  const prev = previousSession(store, date);
+
   return (
     <section>
       <h2>Morning check-in</h2>
       <p className="sub">{fmtDate(date)}</p>
+
+      {prev && (
+        <div className="grading">
+          <div className="glabel">You are grading</div>
+          <b>{fmtDate(prev.date)} · {TEMPLATES[prev.session.day]?.name ?? prev.session.day}</b>
+          <div className="gstats">
+            {prev.setsDone} sets{prev.volume > 0 && <> · {prev.volume.toLocaleString()} lbs</>}
+          </div>
+          {prev.session.notes && <div className="gnote">“{prev.session.notes}”</div>}
+          <div className="ghint">
+            Your tendon reports the morning after, not during. These numbers are
+            the verdict on that session.
+          </div>
+        </div>
+      )}
       <div className="grid2">
         <label className="f"><span>Knee-to-wall R (cm)</span>
           <input className="t" type="number" step="0.5" inputMode="decimal" value={f.ktwR ?? ''} onChange={set('ktwR')} /></label>
@@ -119,6 +136,7 @@ export function ExportView() {
   const { store, dispatch } = useStore();
   const [days, setDays] = useState(7);
   const [msg, setMsg] = useState('');
+  const [paste, setPaste] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const text = buildText(store, days);
 
@@ -127,6 +145,13 @@ export function ExportView() {
   async function copy() {
     try { await navigator.clipboard.writeText(text); flash('Copied — paste it to your coach'); }
     catch { flash('Select the preview text and copy manually'); }
+  }
+
+  async function copyBackup() {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(store));
+      flash('Full backup copied — paste it on the other device');
+    } catch { flash('Could not copy; use the file download instead'); }
   }
 
   function download() {
@@ -139,30 +164,35 @@ export function ExportView() {
     flash('JSON downloaded');
   }
 
+  function applyImport(raw: string) {
+    try {
+      const parsed = JSON.parse(raw) as Store;
+      if (!parsed || (!parsed.sessions && !parsed.history)) throw new Error('bad');
+
+      const historyOnly = parsed.history && Object.keys(parsed.sessions ?? {}).length === 0;
+      if (historyOnly) {
+        const n = Object.keys(parsed.history).length;
+        if (!window.confirm(
+          `Add previous-performance data for ${n} exercises?\n\n` +
+          'This only fills the "last time" line. It adds no sessions and ' +
+          'overwrites nothing you have logged.')) return;
+        dispatch({ type: 'mergeHistory', history: parsed.history });
+        flash(`History added for ${n} exercises`);
+        setPaste('');
+        return;
+      }
+
+      const n = Object.keys(parsed.sessions).length;
+      if (!window.confirm(`Replace all data on this device with ${n} imported session${n === 1 ? '' : 's'}?`)) return;
+      dispatch({ type: 'replaceAll', store: parsed });
+      setPaste('');
+      flash('Restored');
+    } catch { flash('That is not a valid backup'); }
+  }
+
   function restore(file: File) {
     const fr = new FileReader();
-    fr.onload = () => {
-      try {
-        const parsed = JSON.parse(String(fr.result)) as Store;
-        if (!parsed || (!parsed.sessions && !parsed.history)) throw new Error('bad');
-
-        const historyOnly = parsed.history && Object.keys(parsed.sessions ?? {}).length === 0;
-        if (historyOnly) {
-          const n = Object.keys(parsed.history).length;
-          if (!window.confirm(
-            `Add previous-performance data for ${n} exercises?\n\n` +
-            'This only fills the "last time" line. It adds no sessions and ' +
-            'overwrites nothing you have logged.')) return;
-          dispatch({ type: 'mergeHistory', history: parsed.history });
-          flash(`History added for ${n} exercises`);
-          return;
-        }
-
-        if (!window.confirm('Replace all data on this device with the file contents?')) return;
-        dispatch({ type: 'replaceAll', store: parsed });
-        flash('Restored');
-      } catch { flash('That file is not a valid backup'); }
-    };
+    fr.onload = () => applyImport(String(fr.result));
     fr.readAsText(file);
   }
 
@@ -177,9 +207,25 @@ export function ExportView() {
         </select></label>
       <button className="btn" onClick={copy}>Copy log for coach</button>
       <button className="btn sec" onClick={download}>Download JSON backup</button>
-      <button className="btn sec" onClick={() => fileRef.current?.click()}>Restore / import history</button>
+      <button className="btn sec" onClick={copyBackup}>Copy full backup to clipboard</button>
+      <button className="btn sec" onClick={() => fileRef.current?.click()}>Restore from a file</button>
       <input ref={fileRef} type="file" accept="application/json" hidden
         onChange={(e) => e.target.files?.[0] && restore(e.target.files[0])} />
+
+      <h3>Paste a backup</h3>
+      <p className="sub">
+        Easier than files on a phone. Copy the JSON from another device, paste it
+        here, and import.
+      </p>
+      <textarea
+        className="t" value={paste} onChange={(e) => setPaste(e.target.value)}
+        placeholder='{"version":4,"sessions":{ … }}'
+        aria-label="Paste backup JSON"
+        style={{ minHeight: 90, fontFamily: 'monospace', fontSize: '.76rem' }}
+      />
+      <button className="btn sec" disabled={!paste.trim()} onClick={() => applyImport(paste)}>
+        Import pasted data
+      </button>
       <h3>Preview</h3>
       <pre className="out">{text}</pre>
       <button className="btn dgr" style={{ marginTop: 22 }} onClick={() => {

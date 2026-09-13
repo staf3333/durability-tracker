@@ -494,3 +494,93 @@ describe('schema v4', () => {
     expect(s.sync.pending).toEqual({ '2026-09-14': true });
   });
 });
+
+/* ---------- the check-in grades yesterday, not just today ---------- */
+describe('check-in context', () => {
+  it('shows the previous logged session and what it contained', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, history: {}, sync: emptySync,
+      sessions: {
+        '2026-09-10': {
+          day: 'mon', readiness: null, notes: 'legs felt heavy', updatedAt: NOW,
+          exercises: { hens: [
+            { reps: '6', load: '75', done: true },
+            { reps: '6', load: '75', done: true },
+          ] },
+        },
+      },
+    }));
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check-in' }));
+
+    const panel = document.querySelector('.grading')!;
+    expect(panel.textContent).toMatch(/You are grading/i);
+    expect(panel.textContent).toMatch(/Sep 10/);
+    expect(panel.textContent).toMatch(/2 sets/);
+    expect(panel.textContent).toMatch(/900 lbs/);          // 75 x 6 x 2
+    expect(panel.textContent).toMatch(/legs felt heavy/);
+  });
+
+  it('explains why the next-morning reading is the one that counts', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, history: {}, sync: emptySync,
+      sessions: {
+        '2026-09-10': { day: 'mon', readiness: null, notes: '', updatedAt: NOW,
+                        exercises: { hens: [{ reps: '6', load: '75', done: true }] } },
+      },
+    }));
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check-in' }));
+    expect(document.querySelector('.grading')!.textContent)
+      .toMatch(/reports the morning after, not during/i);
+  });
+
+  it('shows nothing to grade when there is no prior session', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check-in' }));
+    expect(document.querySelector('.grading')).toBeNull();
+  });
+
+  it('ignores an empty session and grades the last real one', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, history: {}, sync: emptySync,
+      sessions: {
+        '2026-09-09': { day: 'mon', readiness: null, notes: 'the real one', updatedAt: NOW,
+                        exercises: { hens: [{ reps: '6', load: '70', done: true }] } },
+        '2026-09-11': { day: 'tue', readiness: null, notes: '', updatedAt: NOW, exercises: {} },
+      },
+    }));
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check-in' }));
+    expect(document.querySelector('.grading')!.textContent).toMatch(/the real one/);
+  });
+});
+
+/* ---------- pasting a backup, for cutover on a phone ---------- */
+describe('paste import', () => {
+  it('imports a pasted full backup', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    const payload = JSON.stringify({
+      version: 4, history: {}, sync: emptySync,
+      sessions: { '2026-09-11': { day: 'mon', readiness: null, notes: 'from my phone',
+                                  updatedAt: NOW, exercises: {} } },
+    });
+    fireEvent.change(screen.getByLabelText(/Paste backup JSON/i), { target: { value: payload } });
+    await userEvent.click(screen.getByRole('button', { name: /Import pasted data/i }));
+    expect(read().sessions['2026-09-11'].notes).toBe('from my phone');
+  });
+
+  it('rejects malformed input without destroying existing data', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, history: {}, sync: emptySync,
+      sessions: { '2026-09-11': { day: 'mon', readiness: null, notes: 'keep me',
+                                  updatedAt: NOW, exercises: {} } },
+    }));
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Export' }));
+    fireEvent.change(screen.getByLabelText(/Paste backup JSON/i), { target: { value: 'not json' } });
+    await userEvent.click(screen.getByRole('button', { name: /Import pasted data/i }));
+    expect(read().sessions['2026-09-11'].notes).toBe('keep me');
+  });
+});

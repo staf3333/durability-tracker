@@ -180,3 +180,13 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
 .sync.error .dotv,.sync.wrongAccount .dotv{background:var(--red)}
 .sync.error,.sync.wrongAccount{border-color:#f0cfcb;color:var(--red)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+/* "you are grading" panel on the check-in */
+.grading{border:1px solid var(--line);border-left:3px solid var(--green);border-radius:0 8px 8px 0;
+  padding:12px 14px;margin:0 0 18px;background:#fafafa}
+.glabel{font-size:.66rem;font-weight:800;letter-spacing:.9px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px}
+.grading b{display:block;font-size:.95rem}
+.gstats{font-size:.84rem;color:var(--muted);margin-top:3px;font-variant-numeric:tabular-nums}
+.gnote{font-size:.85rem;margin-top:8px;font-style:italic;color:#555}
+.ghint{font-size:.78rem;color:var(--muted);margin-top:9px;line-height:1.4}
