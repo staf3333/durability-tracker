@@ -198,7 +198,7 @@ Base `/api`. All routes require `authenticated`. All responses JSON.
 ### `GET /api/me`
 
 ```json
-{ "userId": "github|12345678", "provider": "github", "serverTime": "2026-09-12T22:40:11Z" }
+{ "userId": "60760f99ce384f6a8d17751617776ad5", "provider": "github", "serverTime": "2026-09-13T06:41:36Z" }
 ```
 
 `401` when signed out.
@@ -647,6 +647,7 @@ the case that unit tests will not catch.
 | 12 Sep | GitHub as the only provider | `userId` is provider-scoped; two providers = two datasets |
 | 12 Sep | Session-level LWW, no CRDT | Complexity unjustified for one user; revisit if it bites |
 | 12 Sep | Local wipe does not sync | Clearing a phone must not clear the account |
+| 12 Sep | Service worker must denylist `/api/*` and `/.auth/*` | The generated SPA navigation fallback otherwise answers every navigation from cache, so auth can never complete and the API is unreachable from a browser |
 | 12 Sep | Coach proposes, never mutates | Rehab prescriptions govern healing tissue; silent AI edits are the failure mode to design out |
 | 12 Sep | Plan becomes data, but only at P5 | Right architecture, wrong week — do not change the delivery mechanism while starting the programme |
 | 12 Sep | Coach reads direct, writes via API | Direct reads add no auth surface; direct writes would bypass upsert and conflict rules |
