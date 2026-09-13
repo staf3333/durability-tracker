@@ -415,7 +415,97 @@ sign in → import. This is a one-time manual step and must be in the runbook.
 
 ---
 
-## 15. Phased plan
+## 15. Coach integration
+
+The storage design above is complete for *logging*. It is only half of what the
+coaching loop needs. Three gaps, and the fixes.
+
+### Gap 1 — the program is code, not data
+
+`src/data/templates.ts` is compiled into the bundle. So "the coach adjusts next
+week's prescription" currently means editing TypeScript and redeploying. That
+fights the entire premise of a program that adapts to weekly response.
+
+**Fix: plan-as-data.** Templates move into storage and sync like everything else.
+
+```
+PartitionKey = userId
+RowKey       = "plan:v<N>"        # versioned, never overwritten
+Payload      = JSON of Record<day, Template>
+EffectiveFrom = ISO date
+```
+
+The client reads the newest plan whose `EffectiveFrom` has passed, and caches it
+locally so offline is unaffected. Old versions are retained, so "what was I
+actually prescribed in week 3" stays answerable.
+
+**This is deliberately not a P0.** It is the right architecture and the wrong
+week — see the phasing table.
+
+### Gap 2 — coaching output has nowhere to live
+
+Weekly reviews, stage advancement, deload calls and the reasoning behind them
+currently exist only in chat history. They should be first-class data.
+
+```
+PartitionKey = userId
+RowKey       = "note:<iso>"
+Payload      = { kind: 'review' | 'decision' | 'flag',
+                 body: string,
+                 refs: string[],        # session dates the note is about
+                 author: 'coach' | 'athlete' }
+```
+
+### Gap 3 — no write path, and it must stay that way by default
+
+**The coach proposes; it never mutates.** This is a safety decision, not a
+stylistic one. This program manages a healing ligament and a load-sensitive
+tendon. An AI silently rewriting a prescription — or worse, silently rewriting
+it *wrongly* — is precisely the failure mode to design out. Prescription changes
+require explicit human acceptance.
+
+```
+PartitionKey = userId
+RowKey       = "proposal:<iso>"
+Payload      = { summary: string,
+                 rationale: string,
+                 diff: PlanDiff,
+                 status: 'pending' | 'accepted' | 'rejected',
+                 decidedAt?: string }
+```
+
+The app surfaces pending proposals on the Today tab. Accepting one writes a new
+plan version; rejecting records the rejection. Either way the reasoning is
+preserved.
+
+### Access model
+
+| Actor | Reads | Writes | Auth |
+|---|---|---|---|
+| PWA | Own data | Own sessions, accept/reject proposals | SWA built-in (GitHub) |
+| Coach agent (local Mac) | Direct from Table Storage | **Via `/api` only** | Existing `az login` identity + RBAC |
+
+**Reads go direct; writes go through the API.** Direct reads via your existing
+Azure identity add no new auth surface — assign *Storage Table Data Reader* on
+the account and the agent inherits it. Direct *writes* would bypass the upsert
+and conflict rules in §7 and §9, producing exactly the inconsistency that spec
+exists to prevent.
+
+The coach therefore needs no token, no secret in a config file, and no second
+identity system. If `az login` has expired, the coach degrades to reading
+exported JSON.
+
+### What this changes about the answer to "is this optimal?"
+
+For durable multi-device storage: yes, as specified.
+
+For the coaching loop: only with §15. Without plan-as-data and proposals, the
+coach can read what you did but cannot change what you are told to do next —
+which is most of the value.
+
+---
+
+## 16. Phased plan
 
 | Phase | Work | Risk | Can ship before Monday? |
 |---|---|---|---|
@@ -424,13 +514,20 @@ sign in → import. This is a one-time manual step and must be in the runbook.
 | **P2** | Functions API + auth wiring, tested against the real table | Medium | No |
 | **P3** | Client sync layer, conflict banner, sync status UI | Medium | No |
 | **P4** | Hosting cutover, custom domain, data migration | Medium | No |
+| **P5** | Plan-as-data: templates move to storage, versioned | High | **No — after Block 1 is running** |
+| **P6** | Proposals + coach notes; coach read access via RBAC | Medium | No |
 
 P0 is worth landing tonight: it is pure client-side schema work, fully covered
 by tests, and it unblocks everything else. P2–P4 are weekend work.
 
+**P5 is explicitly gated on Block 1 being underway.** Converting the program
+from code to data while simultaneously starting to follow that program means
+debugging the delivery mechanism and the training effect at the same time. Get
+four weeks of clean logs first.
+
 ---
 
-## 16. Testing
+## 17. Testing
 
 **Unit** — reducer purity under the new schema; v1→v4 and v3→v4 migration;
 conflict resolution as a pure function over (local, remote).
@@ -445,7 +542,7 @@ the case that unit tests will not catch.
 
 ---
 
-## 17. Open questions
+## 18. Open questions
 
 1. **Custom domain?** Avoids ever moving the URL again. Needs a domain — do you
    own one, or want one?
@@ -453,11 +550,12 @@ the case that unit tests will not catch.
 3. **Retention.** Keep every version, or only current? Table Storage has no
    built-in history. A `sessions-archive` table on every overwrite is cheap
    insurance against LWW loss — worth it?
-4. **Coach access.** Should the agent read the API directly with a service
-   principal, or keep reading exported JSON locally?
+4. ~~**Coach access.**~~ **Resolved (§15):** reads go direct to Table Storage
+   using the existing `az login` identity with a Storage Table Data Reader role;
+   writes go through `/api` so they obey the upsert and conflict rules.
 5. **Do we want P0 tonight** and the rest after baselines?
 
-## 18. Decision log
+## 19. Decision log
 
 | Date | Decision | Why |
 |---|---|---|
@@ -470,3 +568,6 @@ the case that unit tests will not catch.
 | 12 Sep | GitHub as the only provider | `userId` is provider-scoped; two providers = two datasets |
 | 12 Sep | Session-level LWW, no CRDT | Complexity unjustified for one user; revisit if it bites |
 | 12 Sep | Local wipe does not sync | Clearing a phone must not clear the account |
+| 12 Sep | Coach proposes, never mutates | Rehab prescriptions govern healing tissue; silent AI edits are the failure mode to design out |
+| 12 Sep | Plan becomes data, but only at P5 | Right architecture, wrong week — do not change the delivery mechanism while starting the programme |
+| 12 Sep | Coach reads direct, writes via API | Direct reads add no auth surface; direct writes would bypass upsert and conflict rules |
