@@ -166,3 +166,17 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
 .stats div{flex:1;background:#fafafa;padding:10px 6px;text-align:center}
 .stats b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums}
 .stats span{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+
+/* sync chip */
+.sync{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);
+  background:#fff;border-radius:20px;padding:4px 11px;font:inherit;font-size:.72rem;
+  font-weight:700;letter-spacing:.3px;cursor:pointer;color:#666;white-space:nowrap}
+.sync .dotv{width:7px;height:7px;border-radius:50%;background:#bbb}
+.sync.idle .dotv{background:var(--green)}
+.sync.syncing .dotv{background:var(--amber);animation:pulse 1s infinite}
+.sync.offline .dotv{background:#999}
+.sync.signedOut{border-color:#cfe0f5;color:#1d5b96}
+.sync.signedOut .dotv{background:#1d5b96}
+.sync.error .dotv,.sync.wrongAccount .dotv{background:var(--red)}
+.sync.error,.sync.wrongAccount{border-color:#f0cfcb;color:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}

@@ -192,6 +192,9 @@ describe('logging', () => {
 describe('set timer', () => {
   it('counts down, pauses, and auto-logs on completion', async () => {
     render(<App />);
+    // let the sync hook's identity check settle before fake timers are installed,
+    // otherwise it resolves later and updates state outside act()
+    await act(async () => { await Promise.resolve(); });
     fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'thu' } });
     vi.useFakeTimers();
 
