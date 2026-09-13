@@ -42,6 +42,55 @@ export function sessionHasData(session: Session | undefined) {
     sets.some((s) => s.done || s.reps || s.load));
 }
 
+export interface PastPerformance {
+  date: string;
+  sets: SetEntry[];
+  /** True when this came from imported history rather than a logged session. */
+  imported?: boolean;
+}
+
+/**
+ * Most recent earlier session that actually logged this exercise. Drives the
+ * "last time" line and the per-set placeholders — the thing that lets you walk
+ * up to the bar already knowing what to load.
+ */
+export function lastPerformance(
+  store: Store, beforeDate: string, exId: string,
+): PastPerformance | null {
+  const keys = Object.keys(store.sessions).filter((k) => k < beforeDate).sort().reverse();
+  for (const k of keys) {
+    const sets = store.sessions[k].exercises[exId];
+    if (sets?.some((s) => s.done || s.reps || s.load)) {
+      return { date: k, sets: sets.filter((s) => s.done || s.reps || s.load) };
+    }
+  }
+  // Fall back to imported history, which a real log always supersedes.
+  const h = store.history?.[exId];
+  return h ? { date: h.date, sets: h.sets, imported: true } : null;
+}
+
+export function summarisePast(p: PastPerformance | null) {
+  if (!p) return null;
+  return p.sets
+    .map((s) => (s.load ? `${s.load}×${s.reps || '?'}` : s.reps || '—'))
+    .join(', ');
+}
+
+/** Total load moved this session — the "5,550 lbs" readout. */
+export function sessionVolume(session: Session | undefined) {
+  if (!session) return 0;
+  return Object.values(session.exercises).flat().reduce((sum, s) => {
+    const load = parseFloat(s.load);
+    const reps = parseFloat(s.reps);
+    return sum + (Number.isFinite(load) && Number.isFinite(reps) ? load * reps : 0);
+  }, 0);
+}
+
+export function countDone(session: Session | undefined) {
+  if (!session) return 0;
+  return Object.values(session.exercises).flat().filter((s) => s.done).length;
+}
+
 /** Falls back across every template so an exported log never shows a raw id. */
 export function nameFor(day: string, exId: string): string {
   const scan = (t?: Template) =>

@@ -64,7 +64,20 @@ export interface Session {
   notes: string;
 }
 
+/** A prior performance imported from outside the app. Never a logged session. */
+export interface HistoryEntry {
+  date: string;
+  source: string;
+  sets: SetEntry[];
+}
+
 export interface Store {
-  version: 2;
+  version: 3;
   sessions: Record<string, Session>;
+  /**
+   * exerciseId -> last known performance from imported history. Feeds the
+   * "last time" line only. Never rendered in History, never exported as a
+   * logged session, always superseded by a real log.
+   */
+  history: Record<string, HistoryEntry>;
 }

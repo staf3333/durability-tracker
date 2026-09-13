@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import type { Block, Status } from '../types';
 import { TEMPLATES, DAY_ORDER } from '../data/templates';
 import { useStore } from '../state/store';
-import { sessionHasData, setsOf } from '../lib/plan';
+import { countDone, sessionHasData, sessionVolume, setsOf } from '../lib/plan';
 import { BlockView } from './BlockView';
 import { RestBar, useCountdown } from './Timers';
+import { fmtSec } from '../lib/plan';
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon · Lower A', tue: 'Tue · Shooting', wed: 'Wed · Lower B',
@@ -51,9 +52,18 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
   }
 
   const status = session?.readiness?.status;
+  const volume = sessionVolume(session);
+  const done = countDone(session);
 
   return (
     <section>
+      {(done > 0 || volume > 0) && (
+        <div className="stats">
+          <div><b>{done}</b><span>sets done</span></div>
+          <div><b>{volume ? volume.toLocaleString() : '—'}</b><span>lbs moved</span></div>
+          <div><b>{rest.timer ? fmtSec(rest.timer.remain) : '—'}</b><span>rest</span></div>
+        </div>
+      )}
       <label className="f">
         <span>Session</span>
         <select className="t" value={day} onChange={(e) => changeDay(e.target.value)} aria-label="Session">
@@ -74,6 +84,8 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
           key={i}
           block={block}
           session={session}
+          store={store}
+          date={date}
           timer={setTimer.timer}
           onField={(exId, index, field, value) =>
             dispatch({ type: 'setSetField', date, day, exId, index, field, value })}

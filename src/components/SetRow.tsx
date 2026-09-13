@@ -14,12 +14,44 @@ export function ExerciseLabel({ ex }: { ex: Exercise }) {
   );
 }
 
+/** Numeric field with −/+ steppers. Typing still works; the buttons are for gym use. */
+function Stepper({
+  value, onChange, step, placeholder, label, decimal,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  step: number;
+  placeholder?: string;
+  label: string;
+  decimal?: boolean;
+}) {
+  const nudge = (dir: number) => {
+    const base = parseFloat(value || placeholder || '0') || 0;
+    const next = Math.max(0, base + dir * step);
+    onChange(String(Number(next.toFixed(2))));
+  };
+  return (
+    <div className="step">
+      <button onClick={() => nudge(-1)} aria-label={`Decrease ${label}`}>−</button>
+      <input
+        inputMode={decimal ? 'decimal' : 'numeric'}
+        value={value}
+        placeholder={placeholder ?? ''}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+      />
+      <button onClick={() => nudge(1)} aria-label={`Increase ${label}`}>+</button>
+    </div>
+  );
+}
+
 interface SetRowProps {
   ex: Exercise;
   index: number;
   entry: SetEntry;
   timer: TimerState | null;
-  /** Rendered inside a superset/circuit round rather than an exercise card. */
+  /** Same set from the last session that logged this exercise. */
+  past?: SetEntry;
   grouped?: boolean;
   onField: (field: 'reps' | 'load', value: string) => void;
   onToggle: () => void;
@@ -28,10 +60,11 @@ interface SetRowProps {
 }
 
 export function SetRow({
-  ex, index, entry, timer, grouped, onField, onToggle, onTimer, onRemove,
+  ex, index, entry, timer, past, grouped, onField, onToggle, onTimer, onRemove,
 }: SetRowProps) {
   const key = `${ex.id}:${index}`;
   const live = timer?.key === key;
+  const timed = ex.seconds != null;
 
   return (
     <div className={`setrow${grouped ? ' grow' : ''}`} data-ex={ex.id} data-i={index}>
@@ -39,31 +72,42 @@ export function SetRow({
         ? <span className="gname">{ex.name}{ex.side && <span className={`flag ${ex.side.toLowerCase()}`}>{ex.side}</span>}</span>
         : <span className="n">{index + 1}</span>}
 
-      {ex.seconds != null && (
+      {timed && (
         <button
           className={`stimer${live && timer.running ? ' run' : live ? ' hold' : ''}`}
           onClick={onTimer}
           aria-label={live && timer.running ? 'Pause set timer' : 'Start set timer'}
         >
-          {live ? `${timer.running ? '❚❚' : '▶'} ${fmtSec(timer.remain)}` : `▶ ${fmtSec(ex.seconds)}`}
+          {live ? `${timer.running ? '❚❚' : '▶'} ${fmtSec(timer.remain)}` : `▶ ${fmtSec(ex.seconds!)}`}
         </button>
       )}
 
-      <input
-        inputMode="numeric"
-        placeholder={ex.seconds != null ? 'time' : 'reps'}
-        value={entry.reps}
-        onChange={(e) => onField('reps', e.target.value)}
-        aria-label={`${ex.name} set ${index + 1} reps`}
-      />
+      {timed ? (
+        <input
+          inputMode="numeric"
+          placeholder={past?.reps || 'time'}
+          value={entry.reps}
+          onChange={(e) => onField('reps', e.target.value)}
+          aria-label={`${ex.name} set ${index + 1} reps`}
+        />
+      ) : (
+        <Stepper
+          value={entry.reps}
+          placeholder={past?.reps}
+          onChange={(v) => onField('reps', v)}
+          step={1}
+          label={`${ex.name} set ${index + 1} reps`}
+        />
+      )}
 
       {ex.weight && (
-        <input
-          inputMode="decimal"
-          placeholder="lb"
+        <Stepper
           value={entry.load}
-          onChange={(e) => onField('load', e.target.value)}
-          aria-label={`${ex.name} set ${index + 1} load`}
+          placeholder={past?.load}
+          onChange={(v) => onField('load', v)}
+          step={5}
+          decimal
+          label={`${ex.name} set ${index + 1} load`}
         />
       )}
 

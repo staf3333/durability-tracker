@@ -139,3 +139,30 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
 .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.75rem;color:var(--muted);margin-top:18px;
   padding-top:14px;border-top:1px solid var(--line)}
 .legend i{display:inline-block;width:20px;height:11px;border:1px solid var(--line);margin-right:5px;vertical-align:0}
+
+/* previous-performance line */
+.lastline{display:flex;align-items:center;gap:7px;padding:0 13px 9px;margin-top:-4px;
+  font-size:.79rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.lastline b{font-size:.66rem;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+  background:#eee;color:#666;padding:2px 6px;border-radius:3px}
+.lastline span{margin-left:auto;opacity:.7}
+.glist small.last{color:#6a7f5e;font-variant-numeric:tabular-nums}
+.glist small.last b{font-size:.64rem;letter-spacing:.7px;text-transform:uppercase;opacity:.8}
+
+/* stepper */
+.step{flex:1 1 88px;min-width:0;display:flex;align-items:stretch;border:1px solid var(--line);
+  border-radius:6px;overflow:hidden;background:#fff;height:38px}
+.step input{flex:1;min-width:0;border:0;text-align:center;font:inherit;font-size:.92rem;
+  padding:0 2px;background:transparent;font-variant-numeric:tabular-nums}
+.step input:focus{outline:2px solid var(--green);outline-offset:-2px}
+.step button{flex:0 0 30px;border:0;background:#fafafa;color:var(--green-d);font-size:1.05rem;
+  font-weight:700;cursor:pointer;padding:0;line-height:1}
+.step button:active{background:#eee}
+.grow .step{flex:0 1 78px}
+
+/* session stats */
+.stats{display:flex;gap:1px;background:var(--line);border:1px solid var(--line);
+  border-radius:8px;overflow:hidden;margin:0 0 16px}
+.stats div{flex:1;background:#fafafa;padding:10px 6px;text-align:center}
+.stats b{display:block;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.stats span{font-size:.68rem;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}

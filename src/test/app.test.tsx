@@ -21,6 +21,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Steppers add "Decrease/Increase <label>" buttons, so match the input exactly. */
+const field = (scope: HTMLElement, name: string, n: number, kind: 'reps' | 'load') =>
+  within(scope).getByLabelText(new RegExp(`^${name} set ${n} ${kind}$`, 'i'));
+
 const pick = async (day: string) => {
   await userEvent.selectOptions(screen.getByLabelText('Session'), day);
 };
@@ -85,7 +89,7 @@ describe('reducer', () => {
       sessions: { '2026-09-15': { day: 'mon', notes: 'ok', readiness: null, ex: { hens: [{ r: '6', w: '135', done: true }] } } },
     });
     const store = hydrate(v1);
-    expect(store.version).toBe(2);
+    expect(store.version).toBe(3);
     const set = store.sessions['2026-09-15'].exercises.hens[0];
     expect(set).toEqual({ reps: '6', load: '135', done: true });
   });
@@ -98,7 +102,7 @@ describe('session rendering', () => {
     await pick('mon');
     const squat = document.querySelector('.ex[data-ex="hens"]')!;
     expect(squat).toBeInTheDocument();
-    expect(within(squat as HTMLElement).getAllByLabelText(/set \d reps/i)).toHaveLength(4);
+    expect((squat as HTMLElement).querySelectorAll('.setrow')).toHaveLength(4);
     expect(squat.querySelector('.round')).toBeNull();
   });
 
@@ -143,9 +147,9 @@ describe('logging', () => {
     render(<App />);
     await pick('mon');
     const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
-    await userEvent.type(within(squat).getAllByLabelText(/set 1 reps/i)[0], '6');
-    await userEvent.type(within(squat).getAllByLabelText(/set 1 load/i)[0], '135');
-    await userEvent.click(within(squat).getAllByLabelText(/set 1 done/i)[0]);
+    await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'reps'), '6');
+    await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'load'), '135');
+    await userEvent.click(within(squat).getByLabelText(/set 1 done/i));
     const set = read().sessions[today()].exercises.hens[0];
     expect(set).toEqual({ reps: '6', load: '135', done: true });
   });
@@ -155,7 +159,7 @@ describe('logging', () => {
     await pick('mon');
     const round = document.querySelector('.grp.superset .round') as HTMLElement;
     const soleusRow = round.querySelector('[data-ex="soleus"]') as HTMLElement;
-    await userEvent.type(within(soleusRow).getByLabelText(/set 1 reps/i), '12');
+    await userEvent.type(field(soleusRow, 'Soleus Raise', 1, 'reps'), '12');
     expect(read().sessions[today()].exercises.soleus[0].reps).toBe('12');
   });
 
@@ -240,7 +244,7 @@ describe('session relabelling guard', () => {
     render(<App />);
     await pick('mon');
     const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
-    await userEvent.type(within(squat).getAllByLabelText(/set 1 reps/i)[0], '6');
+    await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'reps'), '6');
     await pick('wed');
     expect(read().sessions[today()].day).toBe('mon');
   });
@@ -249,7 +253,7 @@ describe('session relabelling guard', () => {
     render(<App />);
     await pick('mon');
     const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
-    await userEvent.type(within(squat).getAllByLabelText(/set 1 reps/i)[0], '6');
+    await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'reps'), '6');
     await pick('wed');
     expect(read().sessions[today()].day).toBe('wed');
   });
@@ -290,3 +294,108 @@ describe('privacy', () => {
     expect(blob).not.toMatch(/deltoid|MRI|avulsion|tenosynovitis|malleol|osteochondral/i);
   });
 });
+
+/* ---------- imported history feeds "last time" without inventing sessions ---------- */
+describe('imported history', () => {
+  const seeded: Store = {
+    version: 3,
+    sessions: {},
+    history: {
+      hens: { date: '2026-04-17', source: 'Vert Code Elite Phase 1',
+              sets: [{ reps: '8', load: '90', done: true }, { reps: '8', load: '90', done: true }] },
+    },
+  };
+
+  it('never appears as a logged session', () => {
+    const s = reducer(seeded, { type: 'mergeHistory', history: seeded.history });
+    expect(Object.keys(s.sessions)).toHaveLength(0);
+  });
+
+  it('is excluded from the exported log', () => {
+    expect(buildText(seeded, 9999)).toBe('No sessions logged in this range.');
+  });
+
+  it('surfaces as a PJF-labelled last-time line', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(seeded));
+    render(<App />);
+    await pick('mon');
+    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    const line = squat.querySelector('.lastline')!;
+    expect(line.textContent).toMatch(/PJF/);
+    expect(line.textContent).toMatch(/90×8, 90×8/);
+  });
+
+  it('prefills the set placeholder so the load is visible before you lift', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(seeded));
+    render(<App />);
+    await pick('mon');
+    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    const loadInput = within(squat).getByLabelText(/^Heels Elevated Narrow Squat set 1 load$/i);
+    expect(loadInput).toHaveAttribute('placeholder', '90');
+  });
+
+  it('is superseded once a real session is logged', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      ...seeded,
+      sessions: {
+        '2026-09-01': { day: 'mon', readiness: null, notes: '',
+                        exercises: { hens: [{ reps: '6', load: '75', done: true }] } },
+      },
+    }));
+    render(<App />);
+    await pick('mon');
+    const line = document.querySelector('.ex[data-ex="hens"] .lastline')!;
+    expect(line.textContent).toMatch(/last/);
+    expect(line.textContent).toMatch(/75×6/);
+    expect(line.textContent).not.toMatch(/PJF/);
+  });
+
+  it('migrates a v2 store without dropping data', () => {
+    const v2 = JSON.stringify({ version: 2, sessions: { d: { day: 'mon', readiness: null, notes: '', exercises: {} } } });
+    const s = hydrate(v2);
+    expect(s.version).toBe(3);
+    expect(s.history).toEqual({});
+    expect(Object.keys(s.sessions)).toHaveLength(1);
+  });
+});
+
+/* ---------- steppers ---------- */
+describe('steppers', () => {
+  it('increments load by 5 and reps by 1', async () => {
+    render(<App />);
+    await pick('mon');
+    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(squat).getByLabelText(/^Increase .* set 1 load$/i));
+    await userEvent.click(within(squat).getByLabelText(/^Increase .* set 1 reps$/i));
+    const set = JSON.parse(localStorage.getItem('dtrack.v1')!).sessions[
+      Object.keys(JSON.parse(localStorage.getItem('dtrack.v1')!).sessions)[0]].exercises.hens[0];
+    expect(set.load).toBe('5');
+    expect(set.reps).toBe('1');
+  });
+
+  it('steps up from the imported value rather than from zero', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(seededStore));
+    render(<App />);
+    await pick('mon');
+    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(squat).getByLabelText(/^Increase .* set 1 load$/i));
+    const store = JSON.parse(localStorage.getItem('dtrack.v1')!);
+    const set = store.sessions[Object.keys(store.sessions)[0]].exercises.hens[0];
+    expect(set.load).toBe('95');
+  });
+
+  it('never goes below zero', async () => {
+    render(<App />);
+    await pick('mon');
+    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(squat).getByLabelText(/^Decrease .* set 1 load$/i));
+    const store = JSON.parse(localStorage.getItem('dtrack.v1')!);
+    const set = store.sessions[Object.keys(store.sessions)[0]].exercises.hens[0];
+    expect(set.load).toBe('0');
+  });
+});
+
+const seededStore: Store = {
+  version: 3, sessions: {},
+  history: { hens: { date: '2026-04-17', source: 'PJF', sets: [{ reps: '8', load: '90', done: true }] } },
+};

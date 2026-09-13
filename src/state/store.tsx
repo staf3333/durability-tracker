@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from 'react';
-import type { Readiness, Session, SetEntry, Store } from '../types';
+import type { HistoryEntry, Readiness, Session, SetEntry, Store } from '../types';
 import { TEMPLATES } from '../data/templates';
 
 const KEY = 'dtrack.v1';
@@ -22,9 +22,10 @@ export type Action =
   | { type: 'saveReadiness'; date: string; day: string; readiness: Readiness }
   | { type: 'setNotes'; date: string; day: string; notes: string }
   | { type: 'replaceAll'; store: Store }
+  | { type: 'mergeHistory'; history: Record<string, HistoryEntry> }
   | { type: 'wipe' };
 
-export const emptyStore: Store = { version: 2, sessions: {} };
+export const emptyStore: Store = { version: 3, sessions: {}, history: {} };
 
 function blankSets(n: number): SetEntry[] {
   return Array.from({ length: n }, () => ({ reps: '', load: '', done: false }));
@@ -108,8 +109,10 @@ export function reducer(store: Store, action: Action): Store {
       session.notes = action.notes;
       return next;
     }
+    case 'mergeHistory':
+      return { ...store, history: { ...store.history, ...action.history } };
     case 'replaceAll':
-      return action.store;
+      return { ...emptyStore, ...action.store, history: action.store.history ?? {} };
     case 'wipe':
       return emptyStore;
     default:
@@ -123,7 +126,8 @@ export function hydrate(raw: string | null): Store {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed?.sessions) return emptyStore;
-    if (parsed.version === 2) return parsed as Store;
+    if (parsed.version === 3) return { ...parsed, history: parsed.history ?? {} } as Store;
+    if (parsed.version === 2) return { ...parsed, version: 3, history: {} } as Store;
     const sessions: Record<string, Session> = {};
     for (const [date, old] of Object.entries<any>(parsed.sessions)) {
       const exercises: Record<string, SetEntry[]> = {};
@@ -139,7 +143,7 @@ export function hydrate(raw: string | null): Store {
         notes: old.notes ?? '',
       };
     }
-    return { version: 2, sessions };
+    return { version: 3, sessions, history: {} };
   } catch {
     return emptyStore;
   }
@@ -159,6 +163,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch { /* quota or private mode */ }
   }, [store]);
+
+  // Request durable storage. Without this the OS may evict under pressure, and
+  // it does so silently. Harmless where unsupported.
+  useEffect(() => {
+    navigator.storage?.persist?.().catch(() => {});
+  }, []);
 
   return <StoreCtx.Provider value={{ store, dispatch }}>{children}</StoreCtx.Provider>;
 }

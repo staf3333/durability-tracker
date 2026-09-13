@@ -3,3 +3,7 @@ dist
 *.local
 .DS_Store
 durability-*.json
+
+# never commit personal training data
+durability-data/
+*.private.*

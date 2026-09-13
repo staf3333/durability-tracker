@@ -1,11 +1,14 @@
 import type { Block, Session } from '../types';
-import { fmtSec, membersInRound, roundsIn, setsOf } from '../lib/plan';
+import { fmtSec, lastPerformance, membersInRound, roundsIn, setsOf, summarisePast } from '../lib/plan';
+import type { Store } from '../types';
 import { ExerciseLabel, SetRow } from './SetRow';
 import type { TimerState } from './Timers';
 
 interface Props {
   block: Block;
   session: Session | undefined;
+  store: Store;
+  date: string;
   timer: TimerState | null;
   onField: (exId: string, i: number, f: 'reps' | 'load', v: string) => void;
   onToggle: (exId: string, i: number) => void;
@@ -27,6 +30,7 @@ export function BlockView(p: Props) {
         {block.exercises.map((ex) => {
           const sets = setsOf(session, ex);
           const allDone = sets.length > 0 && sets.every((s) => s.done);
+          const past = lastPerformance(p.store, p.date, ex.id);
           return (
             <div key={ex.id} className={`ex${ex.optional ? ' optional' : ''}${allDone ? ' done' : ''}`} data-ex={ex.id}>
               <div className="exhead">
@@ -39,11 +43,17 @@ export function BlockView(p: Props) {
                   {ex.sets > 1 && `${ex.sets} sets`}
                 </div>
               </div>
+              {past && (
+                <div className="lastline">
+                  <b>{past.imported ? 'PJF' : 'last'}</b> {summarisePast(past)}
+                  <span>{past.imported ? past.date : past.date.slice(5).replace('-', '/')}</span>
+                </div>
+              )}
               <div className="sets">
                 {sets.map((entry, i) => (
                   <SetRow
                     key={i}
-                    ex={ex} index={i} entry={entry} timer={timer}
+                    ex={ex} index={i} entry={entry} timer={timer} past={past?.sets[i]}
                     onField={(f, v) => p.onField(ex.id, i, f, v)}
                     onToggle={() => p.onToggle(ex.id, i)}
                     onTimer={() => p.onTimer(ex.id, i, ex.seconds ?? 0)}
@@ -80,13 +90,17 @@ export function BlockView(p: Props) {
         </div>
 
         <ul className="glist">
-          {block.exercises.map((ex) => (
-            <li key={ex.id}>
-              <b><ExerciseLabel ex={ex} /></b>
-              <em>{ex.sets} × {ex.target}</em>
-              {ex.note && <small>{ex.note}</small>}
-            </li>
-          ))}
+          {block.exercises.map((ex) => {
+            const past = lastPerformance(p.store, p.date, ex.id);
+            return (
+              <li key={ex.id}>
+                <b><ExerciseLabel ex={ex} /></b>
+                <em>{ex.sets} × {ex.target}</em>
+                {ex.note && <small>{ex.note}</small>}
+                {past && <small className="last"><b>{past.imported ? 'PJF' : 'last'}</b> {summarisePast(past)} · {past.imported ? past.date : past.date.slice(5).replace('-', '/')}</small>}
+              </li>
+            );
+          })}
         </ul>
 
         {Array.from({ length: rounds }, (_, r) => {
@@ -104,6 +118,7 @@ export function BlockView(p: Props) {
                   key={ex.id}
                   grouped
                   ex={ex} index={r} entry={setsOf(session, ex)[r]} timer={timer}
+                  past={lastPerformance(p.store, p.date, ex.id)?.sets[r]}
                   onField={(f, v) => p.onField(ex.id, r, f, v)}
                   onToggle={() => p.onToggle(ex.id, r)}
                   onTimer={() => p.onTimer(ex.id, r, ex.seconds ?? 0)}

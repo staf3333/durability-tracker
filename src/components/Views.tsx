@@ -144,7 +144,20 @@ export function ExportView() {
     fr.onload = () => {
       try {
         const parsed = JSON.parse(String(fr.result)) as Store;
-        if (!parsed?.sessions) throw new Error('bad');
+        if (!parsed || (!parsed.sessions && !parsed.history)) throw new Error('bad');
+
+        const historyOnly = parsed.history && Object.keys(parsed.sessions ?? {}).length === 0;
+        if (historyOnly) {
+          const n = Object.keys(parsed.history).length;
+          if (!window.confirm(
+            `Add previous-performance data for ${n} exercises?\n\n` +
+            'This only fills the "last time" line. It adds no sessions and ' +
+            'overwrites nothing you have logged.')) return;
+          dispatch({ type: 'mergeHistory', history: parsed.history });
+          flash(`History added for ${n} exercises`);
+          return;
+        }
+
         if (!window.confirm('Replace all data on this device with the file contents?')) return;
         dispatch({ type: 'replaceAll', store: parsed });
         flash('Restored');
@@ -164,7 +177,7 @@ export function ExportView() {
         </select></label>
       <button className="btn" onClick={copy}>Copy log for coach</button>
       <button className="btn sec" onClick={download}>Download JSON backup</button>
-      <button className="btn sec" onClick={() => fileRef.current?.click()}>Restore from JSON</button>
+      <button className="btn sec" onClick={() => fileRef.current?.click()}>Restore / import history</button>
       <input ref={fileRef} type="file" accept="application/json" hidden
         onChange={(e) => e.target.files?.[0] && restore(e.target.files[0])} />
       <h3>Preview</h3>
@@ -176,6 +189,8 @@ export function ExportView() {
       }}>Erase all data on this device</button>
       <p className="sub" style={{ marginTop: 10 }}>
         Everything is stored only in this browser. Nothing is uploaded anywhere.
+        Take a JSON backup regularly — deleting the app or clearing website data
+        erases it, silently.
       </p>
       <div className={`toast${msg ? ' on' : ''}`}>{msg}</div>
     </section>
