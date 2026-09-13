@@ -1,5 +1,5 @@
-import { createContext, useContext, useEffect, useReducer, type ReactNode } from 'react';
-import type { HistoryEntry, Readiness, Session, SetEntry, Store } from '../types';
+import { createContext, useCallback, useContext, useEffect, useReducer, type ReactNode } from 'react';
+import type { HistoryEntry, Readiness, Session, SetEntry, Store, SyncState } from '../types';
 import { TEMPLATES } from '../data/templates';
 
 const KEY = 'dtrack.v1';
@@ -23,21 +23,39 @@ export type Action =
   | { type: 'setNotes'; date: string; day: string; notes: string }
   | { type: 'replaceAll'; store: Store }
   | { type: 'mergeHistory'; history: Record<string, HistoryEntry> }
+  | { type: 'markSynced'; dates: string[]; serverTime: string }
+  | { type: 'setSyncError'; message: string | null }
   | { type: 'wipe' };
 
-export const emptyStore: Store = { version: 3, sessions: {}, history: {} };
+export const emptySync: SyncState = { userId: null, lastSyncedAt: null, pending: {}, lastError: null };
+export const emptyStore: Store = { version: 4, sessions: {}, history: {}, sync: emptySync };
+
+/**
+ * Actions carry the timestamp rather than the reducer reading the clock. Keeps
+ * the reducer pure — it stays testable and safe under StrictMode's double
+ * invocation — while components remain unaware that stamping happens at all.
+ */
+export type Stamped<A> = A & { now: string };
 
 function blankSets(n: number): SetEntry[] {
   return Array.from({ length: n }, () => ({ reps: '', load: '', done: false }));
 }
 
-/** Guarantees a session exists without mutating the previous state object. */
-function withSession(store: Store, date: string, day: string): [Store, Session] {
+/**
+ * Guarantees a session exists without mutating the previous state object, stamps
+ * it, and queues it for push. Every session mutation funnels through here, so
+ * nothing can be edited without also being marked dirty.
+ */
+function withSession(store: Store, date: string, day: string, now: string): [Store, Session] {
   const existing = store.sessions[date];
   const session: Session = existing
-    ? { ...existing, exercises: { ...existing.exercises } }
-    : { day, readiness: null, exercises: {}, notes: '' };
-  const next: Store = { ...store, sessions: { ...store.sessions, [date]: session } };
+    ? { ...existing, exercises: { ...existing.exercises }, updatedAt: now }
+    : { day, readiness: null, exercises: {}, notes: '', updatedAt: now };
+  const next: Store = {
+    ...store,
+    sessions: { ...store.sessions, [date]: session },
+    sync: { ...store.sync, pending: { ...store.sync.pending, [date]: true } },
+  };
   return [next, session];
 }
 
@@ -47,52 +65,52 @@ function ensureSets(session: Session, exId: string, defaults: number): SetEntry[
   return session.exercises[exId];
 }
 
-export function reducer(store: Store, action: Action): Store {
+export function reducer(store: Store, action: Stamped<Action>): Store {
   switch (action.type) {
     case 'setDay': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       session.day = action.day;
       return next;
     }
     case 'setSetField': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       const sets = ensureSets(session, action.exId, action.index + 1);
       while (sets.length <= action.index) sets.push({ reps: '', load: '', done: false });
       sets[action.index] = { ...sets[action.index], [action.field]: action.value };
       return next;
     }
     case 'toggleDone': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       const sets = ensureSets(session, action.exId, action.index + 1);
       sets[action.index] = { ...sets[action.index], done: !sets[action.index].done };
       return next;
     }
     case 'completeTimedSet': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       const sets = ensureSets(session, action.exId, action.index + 1);
       sets[action.index] = { ...sets[action.index], reps: action.value, done: true };
       return next;
     }
     case 'addSet': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       ensureSets(session, action.exId, action.defaults).push({ reps: '', load: '', done: false });
       return next;
     }
     case 'removeSet': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       const sets = ensureSets(session, action.exId, 0);
       sets.splice(action.index, 1);
       return next;
     }
     case 'addRound': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       action.exIds.forEach((id) => {
         ensureSets(session, id, action.defaults[id] ?? 1).push({ reps: '', load: '', done: false });
       });
       return next;
     }
     case 'removeRound': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       action.exIds.forEach((id) => {
         const sets = session.exercises[id];
         if (sets && sets.length > 1) session.exercises[id] = sets.slice(0, -1);
@@ -100,19 +118,30 @@ export function reducer(store: Store, action: Action): Store {
       return next;
     }
     case 'saveReadiness': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       session.readiness = action.readiness;
       return next;
     }
     case 'setNotes': {
-      const [next, session] = withSession(store, action.date, action.day);
+      const [next, session] = withSession(store, action.date, action.day, action.now);
       session.notes = action.notes;
       return next;
     }
+    case 'markSynced': {
+      const pending = { ...store.sync.pending };
+      action.dates.forEach((d) => delete pending[d]);
+      return { ...store, sync: { ...store.sync, pending, lastSyncedAt: action.serverTime, lastError: null } };
+    }
+    case 'setSyncError':
+      return { ...store, sync: { ...store.sync, lastError: action.message } };
     case 'mergeHistory':
       return { ...store, history: { ...store.history, ...action.history } };
     case 'replaceAll':
-      return { ...emptyStore, ...action.store, history: action.store.history ?? {} };
+      return {
+        ...emptyStore, ...action.store,
+        history: action.store.history ?? {},
+        sync: action.store.sync ?? emptySync,
+      };
     case 'wipe':
       return emptyStore;
     default:
@@ -126,8 +155,16 @@ export function hydrate(raw: string | null): Store {
   try {
     const parsed = JSON.parse(raw);
     if (!parsed?.sessions) return emptyStore;
-    if (parsed.version === 3) return { ...parsed, history: parsed.history ?? {} } as Store;
-    if (parsed.version === 2) return { ...parsed, version: 3, history: {} } as Store;
+    if (parsed.version === 4) {
+      return { ...parsed, history: parsed.history ?? {}, sync: parsed.sync ?? emptySync } as Store;
+    }
+    if (parsed.version === 2 || parsed.version === 3) {
+      const sessions: Record<string, Session> = {};
+      for (const [date, old] of Object.entries<any>(parsed.sessions ?? {})) {
+        sessions[date] = { ...old, updatedAt: old.updatedAt ?? `${date}T12:00:00.000Z` };
+      }
+      return { version: 4, sessions, history: parsed.history ?? {}, sync: emptySync };
+    }
     const sessions: Record<string, Session> = {};
     for (const [date, old] of Object.entries<any>(parsed.sessions)) {
       const exercises: Record<string, SetEntry[]> = {};
@@ -141,15 +178,16 @@ export function hydrate(raw: string | null): Store {
         readiness: old.readiness ?? null,
         exercises,
         notes: old.notes ?? '',
+        updatedAt: `${date}T12:00:00.000Z`,
       };
     }
-    return { version: 3, sessions, history: {} };
+    return { version: 4, sessions, history: {}, sync: emptySync };
   } catch {
     return emptyStore;
   }
 }
 
-const StoreCtx = createContext<{ store: Store; dispatch: React.Dispatch<Action> } | null>(null);
+const StoreCtx = createContext<{ store: Store; dispatch: (a: Action) => void } | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [store, dispatch] = useReducer(
@@ -170,7 +208,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     navigator.storage?.persist?.().catch(() => {});
   }, []);
 
-  return <StoreCtx.Provider value={{ store, dispatch }}>{children}</StoreCtx.Provider>;
+  const stamped = useCallback(
+    (action: Action) => dispatch({ ...action, now: new Date().toISOString() } as Stamped<Action>),
+    [],
+  );
+
+  return <StoreCtx.Provider value={{ store, dispatch: stamped }}>{children}</StoreCtx.Provider>;
 }
 
 export function useStore() {

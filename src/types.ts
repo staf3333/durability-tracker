@@ -62,6 +62,19 @@ export interface Session {
   /** exerciseId -> one entry per set/round. */
   exercises: Record<string, SetEntry[]>;
   notes: string;
+  /** Device clock at the time of the edit. Decides who wins a sync conflict. */
+  updatedAt: string;
+  /** Soft-delete tombstone, so a delete propagates instead of being resurrected. */
+  deletedAt?: string;
+}
+
+export interface SyncState {
+  userId: string | null;
+  /** Server time from the last successful sync. Never a device clock. */
+  lastSyncedAt: string | null;
+  /** Session dates awaiting push. Explicit, because clock skew breaks derived dirtiness. */
+  pending: Record<string, true>;
+  lastError: string | null;
 }
 
 /** A prior performance imported from outside the app. Never a logged session. */
@@ -72,7 +85,7 @@ export interface HistoryEntry {
 }
 
 export interface Store {
-  version: 3;
+  version: 4;
   sessions: Record<string, Session>;
   /**
    * exerciseId -> last known performance from imported history. Feeds the
@@ -80,4 +93,5 @@ export interface Store {
    * logged session, always superseded by a real log.
    */
   history: Record<string, HistoryEntry>;
+  sync: SyncState;
 }

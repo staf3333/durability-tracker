@@ -3,12 +3,14 @@ import { render, screen, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { TEMPLATES } from '../data/templates';
-import { hydrate, reducer, emptyStore } from '../state/store';
+import { hydrate, reducer, emptyStore, emptySync } from '../state/store';
+import type { Action } from '../state/store';
 import { buildText, nameFor } from '../lib/plan';
 import type { Store } from '../types';
 
 const KEY = 'dtrack.v1';
 const read = (): Store => JSON.parse(localStorage.getItem(KEY)!);
+const NOW = '2026-09-15T09:00:00.000Z';
 const today = () => Object.keys(read().sessions)[0];
 
 beforeEach(() => {
@@ -66,7 +68,7 @@ describe('reducer', () => {
     const before = { ...emptyStore };
     const after = reducer(before, {
       type: 'setSetField', date: '2026-09-15', day: 'mon',
-      exId: 'hens', index: 0, field: 'reps', value: '6',
+      exId: 'hens', index: 0, field: 'reps', value: '6', now: NOW,
     });
     expect(before.sessions).toEqual({});
     expect(after.sessions['2026-09-15'].exercises.hens[0].reps).toBe('6');
@@ -75,10 +77,10 @@ describe('reducer', () => {
   it('adds and removes a round across every exercise in a group', () => {
     let s = emptyStore as Store;
     const ids = ['razor', 'soleus'];
-    s = reducer(s, { type: 'addRound', date: 'd', day: 'mon', exIds: ids, defaults: { razor: 2, soleus: 3 } });
+    s = reducer(s, { type: 'addRound', date: 'd', day: 'mon', exIds: ids, defaults: { razor: 2, soleus: 3 }, now: NOW });
     expect(s.sessions.d.exercises.razor).toHaveLength(3);
     expect(s.sessions.d.exercises.soleus).toHaveLength(4);
-    s = reducer(s, { type: 'removeRound', date: 'd', day: 'mon', exIds: ids });
+    s = reducer(s, { type: 'removeRound', date: 'd', day: 'mon', exIds: ids, now: NOW });
     expect(s.sessions.d.exercises.razor).toHaveLength(2);
     expect(s.sessions.d.exercises.soleus).toHaveLength(3);
   });
@@ -89,7 +91,7 @@ describe('reducer', () => {
       sessions: { '2026-09-15': { day: 'mon', notes: 'ok', readiness: null, ex: { hens: [{ r: '6', w: '135', done: true }] } } },
     });
     const store = hydrate(v1);
-    expect(store.version).toBe(3);
+    expect(store.version).toBe(4);
     const set = store.sessions['2026-09-15'].exercises.hens[0];
     expect(set).toEqual({ reps: '6', load: '135', done: true });
   });
@@ -263,11 +265,12 @@ describe('session relabelling guard', () => {
 describe('export', () => {
   it('resolves exercise names across templates and never emits a raw id', () => {
     const store: Store = {
-      version: 3,
+      version: 4,
       history: {},
+      sync: emptySync,
       sessions: {
         '2026-09-15': {
-          day: 'wed',
+          day: 'wed', updatedAt: NOW,
           readiness: { ktwR: 11.5, ktwL: 13, anklePain: 1, tendonPain: 2, amStiff: 5, swelling: 'no', notes: '', status: 'green' },
           exercises: { hens: [{ reps: '6', load: '135', done: true }] },
           notes: 'felt strong',
@@ -299,7 +302,8 @@ describe('privacy', () => {
 /* ---------- imported history feeds "last time" without inventing sessions ---------- */
 describe('imported history', () => {
   const seeded: Store = {
-    version: 3,
+    version: 4,
+    sync: emptySync,
     sessions: {},
     history: {
       hens: { date: '2026-04-17', source: 'Vert Code Elite Phase 1',
@@ -308,7 +312,7 @@ describe('imported history', () => {
   };
 
   it('never appears as a logged session', () => {
-    const s = reducer(seeded, { type: 'mergeHistory', history: seeded.history });
+    const s = reducer(seeded, { type: 'mergeHistory', history: seeded.history, now: NOW });
     expect(Object.keys(s.sessions)).toHaveLength(0);
   });
 
@@ -339,7 +343,7 @@ describe('imported history', () => {
     localStorage.setItem('dtrack.v1', JSON.stringify({
       ...seeded,
       sessions: {
-        '2026-09-01': { day: 'mon', readiness: null, notes: '',
+        '2026-09-01': { day: 'mon', readiness: null, notes: '', updatedAt: NOW,
                         exercises: { hens: [{ reps: '6', load: '75', done: true }] } },
       },
     }));
@@ -354,7 +358,7 @@ describe('imported history', () => {
   it('migrates a v2 store without dropping data', () => {
     const v2 = JSON.stringify({ version: 2, sessions: { d: { day: 'mon', readiness: null, notes: '', exercises: {} } } });
     const s = hydrate(v2);
-    expect(s.version).toBe(3);
+    expect(s.version).toBe(4);
     expect(s.history).toEqual({});
     expect(Object.keys(s.sessions)).toHaveLength(1);
   });
@@ -397,6 +401,94 @@ describe('steppers', () => {
 });
 
 const seededStore: Store = {
-  version: 3, sessions: {},
+  version: 4, sync: emptySync, sessions: {},
   history: { hens: { date: '2026-04-17', source: 'PJF', sets: [{ reps: '8', load: '90', done: true }] } },
 };
+
+/* ---------- schema v4: sync metadata ---------- */
+describe('schema v4', () => {
+  it('stamps updatedAt and queues the date for push on every mutation', () => {
+    const s = reducer(emptyStore, {
+      type: 'setSetField', date: '2026-09-14', day: 'mon',
+      exId: 'hens', index: 0, field: 'load', value: '75', now: NOW,
+    });
+    expect(s.sessions['2026-09-14'].updatedAt).toBe(NOW);
+    expect(s.sync.pending).toEqual({ '2026-09-14': true });
+  });
+
+  it('re-stamps on a later edit', () => {
+    const later = '2026-09-14T10:00:00.000Z';
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: '2026-09-14', day: 'mon',
+      exId: 'hens', index: 0, field: 'load', value: '75', now: NOW,
+    });
+    s = reducer(s, { type: 'toggleDone', date: '2026-09-14', day: 'mon', exId: 'hens', index: 0, now: later });
+    expect(s.sessions['2026-09-14'].updatedAt).toBe(later);
+  });
+
+  it('clears pending and advances the cursor on markSynced', () => {
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: '2026-09-14', day: 'mon',
+      exId: 'hens', index: 0, field: 'load', value: '75', now: NOW,
+    });
+    const serverTime = '2026-09-14T09:00:05.000Z';
+    s = reducer(s, { type: 'markSynced', dates: ['2026-09-14'], serverTime, now: NOW });
+    expect(s.sync.pending).toEqual({});
+    expect(s.sync.lastSyncedAt).toBe(serverTime);
+  });
+
+  it('uses server time for the cursor, never the device clock', () => {
+    // device clock running an hour fast
+    const skewed = '2026-09-14T10:00:00.000Z';
+    const serverTime = '2026-09-14T09:00:05.000Z';
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: '2026-09-14', day: 'mon',
+      exId: 'hens', index: 0, field: 'load', value: '75', now: skewed,
+    });
+    s = reducer(s, { type: 'markSynced', dates: ['2026-09-14'], serverTime, now: skewed });
+    expect(s.sync.lastSyncedAt).toBe(serverTime);
+    expect(s.sync.lastSyncedAt! < s.sessions['2026-09-14'].updatedAt).toBe(true);
+  });
+
+  it('does not mark history merges as pending session pushes', () => {
+    const s = reducer(emptyStore, {
+      type: 'mergeHistory', now: NOW,
+      history: { hens: { date: '2026-04-17', source: 'PJF', sets: [] } },
+    });
+    expect(s.sync.pending).toEqual({});
+    expect(s.history.hens).toBeDefined();
+  });
+
+  it('migrates v3 sessions with a deterministic updatedAt', () => {
+    const v3 = JSON.stringify({
+      version: 3, history: {},
+      sessions: { '2026-09-01': { day: 'mon', readiness: null, notes: '', exercises: {} } },
+    });
+    const s = hydrate(v3);
+    expect(s.version).toBe(4);
+    expect(s.sessions['2026-09-01'].updatedAt).toBe('2026-09-01T12:00:00.000Z');
+    expect(s.sync).toEqual(emptySync);
+  });
+
+  it('migrates v1 vanilla data all the way to v4', () => {
+    const v1 = JSON.stringify({
+      v: 1,
+      sessions: { '2026-09-01': { day: 'mon', ex: { hens: [{ r: '6', w: '135', done: true }] } } },
+    });
+    const s = hydrate(v1);
+    expect(s.version).toBe(4);
+    expect(s.sessions['2026-09-01'].exercises.hens[0]).toEqual({ reps: '6', load: '135', done: true });
+    expect(s.sessions['2026-09-01'].updatedAt).toBeTruthy();
+  });
+
+  it('records a sync error without touching training data', () => {
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: '2026-09-14', day: 'mon',
+      exId: 'hens', index: 0, field: 'load', value: '75', now: NOW,
+    });
+    s = reducer(s, { type: 'setSyncError', message: 'offline', now: NOW });
+    expect(s.sync.lastError).toBe('offline');
+    expect(s.sessions['2026-09-14'].exercises.hens[0].load).toBe('75');
+    expect(s.sync.pending).toEqual({ '2026-09-14': true });
+  });
+});
