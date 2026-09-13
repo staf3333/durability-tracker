@@ -1,8 +1,10 @@
 name: Deploy
 
+# Superseded by azure-swa.yml. Kept as a rollback path: the last successful
+# Pages deployment keeps serving until this is run manually again.
+# NOTE: the Vite base path is now '/', so a Pages rebuild would need
+# base '/durability-tracker/' restored first.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
