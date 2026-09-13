@@ -24,6 +24,10 @@ export type Action =
   | { type: 'replaceAll'; store: Store }
   | { type: 'mergeHistory'; history: Record<string, HistoryEntry> }
   | { type: 'markSynced'; dates: string[]; serverTime: string }
+  | { type: 'setUser'; userId: string | null }
+  | { type: 'applyRemote'; sessions: Record<string, Session>; history: Record<string, HistoryEntry>;
+      deleted: string[]; serverTime: string }
+  | { type: 'setConflict'; date: string; mine: Session | null }
   | { type: 'setSyncError'; message: string | null }
   | { type: 'wipe' };
 
@@ -132,6 +136,34 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
       action.dates.forEach((d) => delete pending[d]);
       return { ...store, sync: { ...store.sync, pending, lastSyncedAt: action.serverTime, lastError: null } };
     }
+    case 'setUser':
+      return { ...store, sync: { ...store.sync, userId: action.userId } };
+
+    case 'applyRemote': {
+      const sessions = { ...store.sessions };
+      // Remote wins only when it is strictly newer. A local edit made while
+      // offline is never clobbered by a stale copy from the server.
+      for (const [date, remote] of Object.entries(action.sessions)) {
+        const local = sessions[date];
+        if (!local || remote.updatedAt > local.updatedAt) sessions[date] = remote;
+      }
+      for (const date of action.deleted) {
+        const local = sessions[date];
+        if (local && !local.deletedAt) sessions[date] = { ...local, deletedAt: action.serverTime };
+      }
+      const history = { ...store.history };
+      for (const [exId, entry] of Object.entries(action.history)) {
+        if (!history[exId] || entry.date > history[exId].date) history[exId] = entry;
+      }
+      return {
+        ...store, sessions, history,
+        sync: { ...store.sync, lastSyncedAt: action.serverTime, lastError: null },
+      };
+    }
+
+    case 'setConflict':
+      return { ...store, sync: { ...store.sync, lastConflict: action.mine ? { date: action.date, mine: action.mine } : null } };
+
     case 'setSyncError':
       return { ...store, sync: { ...store.sync, lastError: action.message } };
     case 'mergeHistory':

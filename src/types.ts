@@ -75,6 +75,8 @@ export interface SyncState {
   /** Session dates awaiting push. Explicit, because clock skew breaks derived dirtiness. */
   pending: Record<string, true>;
   lastError: string | null;
+  /** The losing side of the most recent conflict, kept so it is never lost silently. */
+  lastConflict?: { date: string; mine: Session } | null;
 }
 
 /** A prior performance imported from outside the app. Never a logged session. */

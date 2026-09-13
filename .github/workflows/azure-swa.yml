@@ -1,0 +1,55 @@
+name: Deploy to Azure Static Web Apps
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main]
+
+concurrency:
+  group: swa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_deploy:
+    if: github.event_name == 'push' || github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Test and build the client
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Test the API
+        working-directory: api
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Deploy
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: dist          # pre-built by the step above
+          api_location: api
+          skip_app_build: true
+          skip_api_build: false
+
+  close_pr:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: close

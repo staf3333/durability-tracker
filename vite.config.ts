@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  base: '/durability-tracker/',
+  base: '/',
   plugins: [
     react(),
     VitePWA({
@@ -12,8 +12,8 @@ export default defineConfig({
       manifest: {
         name: 'Durability Tracker',
         short_name: 'Durability',
-        start_url: '/durability-tracker/',
-        scope: '/durability-tracker/',
+        start_url: '/',
+        scope: '/',
         display: 'standalone',
         background_color: '#ffffff',
         theme_color: '#5a9e2f',
