@@ -21,18 +21,14 @@
       ]
     }
   ],
-  "responseOverrides": {
-    "401": {
-      "statusCode": 401,
-      "rewrite": "/api-unauthorized.json"
-    }
-  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [
       "/assets/*",
       "/api/*",
+      "/.auth/*",
       "/*.png",
+      "/*.json",
       "/*.webmanifest",
       "/sw.js"
     ]
