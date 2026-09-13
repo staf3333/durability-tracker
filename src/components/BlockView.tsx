@@ -2,6 +2,7 @@ import type { Block, Session } from '../types';
 import { fmtSec, lastPerformance, membersInRound, roundsIn, setsOf, summarisePast } from '../lib/plan';
 import type { Store } from '../types';
 import { ExerciseLabel, SetRow } from './SetRow';
+import { ExerciseHistory } from './ExerciseHistory';
 import type { TimerState } from './Timers';
 
 interface Props {
@@ -49,6 +50,7 @@ export function BlockView(p: Props) {
                   <span>{past.imported ? past.date : past.date.slice(5).replace('-', '/')}</span>
                 </div>
               )}
+              <ExerciseHistory exId={ex.id} store={p.store} />
               <div className="sets">
                 {sets.map((entry, i) => (
                   <SetRow

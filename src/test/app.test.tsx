@@ -584,3 +584,84 @@ describe('paste import', () => {
     expect(read().sessions['2026-09-11'].notes).toBe('keep me');
   });
 });
+
+/* ---------- browsing every past performance of an exercise ---------- */
+describe('exercise history', () => {
+  const withArchive = {
+    version: 4, sync: emptySync, sessions: {},
+    history: {
+      hens: {
+        date: '2026-04-17', source: 'The Vert Code- Elite Phase 1',
+        note: 'Kinda light but no good setup',
+        sets: [{ reps: '8', load: '90', done: true }],
+        archive: [
+          { date: '2025-04-28', source: 'The Vert Code- Elite Phase 1',
+            sets: [{ reps: '8', load: '115', done: true }] },
+          { date: '2025-02-20', source: 'The Durability Code Prime',
+            sets: [{ reps: '5', load: '90', done: true }], note: 'Left knee struggling' },
+        ],
+      },
+    },
+  };
+
+  it('is collapsed until asked for, with a count', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(withArchive));
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    expect(within(card).getByText(/history · 3/)).toBeInTheDocument();
+    expect(card.querySelector('.hlist')).toBeNull();
+  });
+
+  it('lists every performance newest first when opened', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(withArchive));
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(card).getByText(/history · 3/));
+    const dates = [...card.querySelectorAll('.hdate')].map((d) => d.textContent);
+    expect(dates).toEqual(['2026-04-17', '2025-04-28', '2025-02-20']);
+  });
+
+  it('surfaces the heaviest load ever recorded', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(withArchive));
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(card).getByText(/history · 3/));
+    expect(card.querySelector('.hbest')!.textContent).toMatch(/115 lb/);
+  });
+
+  it('keeps your own notes attached to the right session', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify(withArchive));
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(card).getByText(/history · 3/));
+    expect(card.textContent).toMatch(/Left knee struggling/);
+  });
+
+  it('distinguishes sessions logged here from imported ones', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      ...withArchive,
+      sessions: {
+        '2026-09-14': { day: 'mon', readiness: null, notes: '', updatedAt: NOW,
+                        exercises: { hens: [{ reps: '6', load: '75', done: true }] } },
+      },
+    }));
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    await userEvent.click(within(card).getByText(/history · 4/));
+    const own = card.querySelector('.hrow.mine')!;
+    expect(own.querySelector('.hdate')!.textContent).toBe('2026-09-14');
+    expect(card.querySelectorAll('.hrow.mine')).toHaveLength(1);
+  });
+
+  it('shows nothing for an exercise with no record', async () => {
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    expect(card.querySelector('.exhist')).toBeNull();
+  });
+});

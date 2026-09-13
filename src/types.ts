@@ -84,6 +84,9 @@ export interface HistoryEntry {
   date: string;
   source: string;
   sets: SetEntry[];
+  note?: string;
+  /** Earlier performances of the same exercise, newest first. Read-only. */
+  archive?: Array<{ date: string; source: string; sets: SetEntry[]; note?: string }>;
 }
 
 export interface Store {
