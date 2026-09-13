@@ -9,6 +9,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
+      workbox: {
+        // Without this the SPA navigation fallback swallows every navigation,
+        // including /api/* and the /.auth/* sign-in redirect, and serves the
+        // cached app shell instead. Auth can never complete.
+        navigateFallbackDenylist: [/^\/api\//, /^\/\.auth\//],
+      },
       manifest: {
         name: 'Durability Tracker',
         short_name: 'Durability',
