@@ -28,6 +28,10 @@ const field = (scope: HTMLElement, name: string, n: number, kind: 'reps' | 'load
 
 const pick = async (day: string) => {
   await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+  // The session now opens as a compact overview; these assertions exercise the
+  // expanded layout, so open it.
+  const toggle = screen.queryByText('Expand all sets');
+  if (toggle) await userEvent.click(toggle);
 };
 
 /* ---------- content fidelity: the plan must survive the rewrite ---------- */
@@ -196,6 +200,7 @@ describe('set timer', () => {
     // otherwise it resolves later and updates state outside act()
     await act(async () => { await Promise.resolve(); });
     fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'thu' } });
+    fireEvent.click(screen.getByText('Expand all sets'));
     vi.useFakeTimers();
 
     const btn = () => document.querySelector('[data-ex="slantiso"][data-i="0"] .stimer')!;
@@ -793,5 +798,114 @@ describe('sync status', () => {
     await act(async () => { await Promise.resolve(); });
     await act(async () => { await Promise.resolve(); });
     expect(JSON.parse(localStorage.getItem('dtrack.v1')!).sync.userId).toBe('abc123');
+  });
+});
+
+/* ---------- overview and detail ---------- */
+describe('session overview', () => {
+  const open = async (day: string) => {
+    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+  };
+
+  it('opens compact by default, one row per exercise', async () => {
+    render(<App />);
+    await open('mon');
+    expect(document.querySelector('.ovw')).toBeInTheDocument();
+    const expected = TEMPLATES.mon.blocks.flatMap((b) => b.exercises).length;
+    expect(document.querySelectorAll('.orow')).toHaveLength(expected);
+    expect(document.querySelector('.ex .sets')).toBeNull();
+  });
+
+  it('summarises the prescription on each row', async () => {
+    render(<App />);
+    await open('mon');
+    const row = [...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Heels Elevated Narrow Squat'))!;
+    expect(row.querySelector('.ometa')!.textContent).toMatch(/4 sets · 6/);
+  });
+
+  it('shows progress per exercise and marks completion', async () => {
+    render(<App />);
+    await open('mon');
+    const row = () => [...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Single Leg RDL'))!;
+    expect(row().querySelector('.omark')!.textContent).toBe('0/3');
+
+    await userEvent.click(row());
+    const ticks = document.querySelectorAll('.dset .tick');
+    for (const t of ticks) await userEvent.click(t);
+    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+
+    expect(row().querySelector('.omark')!.textContent).toBe('✓');
+    expect(row().className).toMatch(/done/);
+  });
+
+  it('keeps superset grouping visible in the overview', async () => {
+    render(<App />);
+    await open('mon');
+    const groups = document.querySelectorAll('.ogrp.superset');
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups[0].querySelector('.ords')!.textContent).toMatch(/rds · superset/);
+  });
+});
+
+describe('exercise detail', () => {
+  const open = async (day: string, name: string) => {
+    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+    const row = [...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes(name))!;
+    await userEvent.click(row);
+  };
+
+  it('shows one exercise with its cue and every set', async () => {
+    render(<App />);
+    await open('mon', 'Heels Elevated Narrow Squat');
+    expect(document.querySelector('.dname')!.textContent).toMatch(/Heels Elevated Narrow Squat/);
+    expect(document.querySelector('.dnote')!.textContent).toMatch(/main tendon driver/i);
+    expect(document.querySelectorAll('.dset')).toHaveLength(4);
+    expect(document.querySelectorAll('.dsethead')[0].textContent).toMatch(/Set 1/);
+  });
+
+  it('labels sets as rounds inside a superset', async () => {
+    render(<App />);
+    await open('mon', 'Soleus Raise');
+    expect(document.querySelectorAll('.dsethead')[0].textContent).toMatch(/Round 1/);
+  });
+
+  it('logs from the detail view into the same store', async () => {
+    render(<App />);
+    await open('mon', 'Heels Elevated Narrow Squat');
+    await userEvent.type(
+      within(document.querySelectorAll('.dset')[0] as HTMLElement)
+        .getByLabelText(/^Heels Elevated Narrow Squat set 1 load$/i), '75');
+    const store = read();
+    expect(store.sessions[Object.keys(store.sessions)[0]].exercises.hens[0].load).toBe('75');
+  });
+
+  it('moves through the session in order via Up next', async () => {
+    render(<App />);
+    await open('mon', 'Nasal Breathing Cardio Warm Up');
+    expect(document.querySelector('.unname')!.textContent)
+      .toMatch(/Split Stance Loaded Hip Rotations/);
+    await userEvent.click(screen.getByLabelText(/Next exercise/i));
+    expect(document.querySelector('.dname')!.textContent)
+      .toMatch(/Split Stance Loaded Hip Rotations/);
+  });
+
+  it('disables Up next on the final exercise', async () => {
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    const rows = document.querySelectorAll('.orow');
+    await userEvent.click(rows[rows.length - 1]);
+    expect(screen.getByLabelText(/Next exercise/i)).toBeDisabled();
+    expect(document.querySelector('.unname')!.textContent).toMatch(/Last exercise/);
+  });
+
+  it('returns to the overview', async () => {
+    render(<App />);
+    await open('mon', 'Soleus Raise');
+    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+    expect(document.querySelector('.ovw')).toBeInTheDocument();
+    expect(document.querySelector('.detail')).toBeNull();
   });
 });

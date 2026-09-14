@@ -4,6 +4,9 @@ import { TEMPLATES, DAY_ORDER } from '../data/templates';
 import { useStore } from '../state/store';
 import { countDone, sessionHasData, sessionVolume, setsOf } from '../lib/plan';
 import { BlockView } from './BlockView';
+import { SessionOverview } from './SessionOverview';
+import { ExerciseDetail } from './ExerciseDetail';
+import { flatten } from '../lib/session';
 import { RestBar, useCountdown } from './Timers';
 import { fmtSec } from '../lib/plan';
 
@@ -24,6 +27,8 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
   const session = store.sessions[date];
   const tpl = TEMPLATES[day];
   const [toast, setToast] = useState('');
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState(false);
 
   const rest = useCountdown();
   const setTimer = useCountdown((key, total) => {
@@ -32,6 +37,26 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
     setToast('Set complete');
     setTimeout(() => setToast(''), 1800);
   });
+
+  const flat = useMemo(() => flatten(tpl.blocks), [tpl]);
+
+  const handlers = {
+    onField: (exId: string, index: number, field: 'reps' | 'load', value: string) =>
+      dispatch({ type: 'setSetField', date, day, exId, index, field, value }),
+    onToggle: (exId: string, index: number) => {
+      const wasDone = !!session?.exercises[exId]?.[index]?.done;
+      dispatch({ type: 'toggleDone', date, day, exId, index });
+      const ex = flat.find((f) => f.ex.id === exId)?.ex;
+      if (ex?.rest && !wasDone) rest.toggle('rest', ex.rest);
+    },
+    onTimer: (exId: string, index: number, seconds: number) =>
+      setTimer.toggle(`${exId}:${index}`, seconds),
+    onAddSet: (exId: string, defaults: number) =>
+      dispatch({ type: 'addSet', date, day, exId, defaults }),
+    onRemoveSet: (exId: string, index: number) =>
+      dispatch({ type: 'removeSet', date, day, exId, index }),
+    onRest: (sec: number) => rest.toggle('rest', sec),
+  };
 
   const defaultsFor = useMemo(() => {
     const m: Record<string, number> = {};
@@ -79,37 +104,45 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
       <p className="sub">{tpl.sub}</p>
       <div className="note">{tpl.note}</div>
 
-      {tpl.blocks.map((block, i) => (
-        <BlockView
-          key={i}
-          block={block}
-          session={session}
-          store={store}
-          date={date}
-          timer={setTimer.timer}
-          onField={(exId, index, field, value) =>
-            dispatch({ type: 'setSetField', date, day, exId, index, field, value })}
-          onToggle={(exId, index) => {
-            dispatch({ type: 'toggleDone', date, day, exId, index });
-            const ex = block.exercises.find((x) => x.id === exId);
-            const wasDone = setsOf(session, ex!)[index]?.done;
-            if (ex?.rest && !wasDone) rest.toggle('rest', ex.rest);
-          }}
-          onTimer={(exId, index, seconds) => setTimer.toggle(`${exId}:${index}`, seconds)}
-          onAddSet={(exId, defaults) => dispatch({ type: 'addSet', date, day, exId, defaults })}
-          onRemoveSet={(exId, index) => dispatch({ type: 'removeSet', date, day, exId, index })}
-          onAddRound={(b: Block) => dispatch({
-            type: 'addRound', date, day,
-            exIds: b.exercises.map((x) => x.id), defaults: defaultsFor,
-          })}
-          onRemoveRound={(b: Block) => {
-            const min = b.exercises.reduce((n, ex) => Math.max(n, setsOf(session, ex).length), 1);
-            if (min <= 1) { setToast('Keep at least one round'); setTimeout(() => setToast(''), 1800); return; }
-            dispatch({ type: 'removeRound', date, day, exIds: b.exercises.map((x) => x.id) });
-          }}
-          onRest={(sec) => rest.toggle('rest', sec)}
+      {openIndex === null ? (
+        <>
+          <button className="viewtog" onClick={() => setExpanded((e) => !e)}>
+            {expanded ? 'Compact list' : 'Expand all sets'}
+          </button>
+
+          {expanded ? tpl.blocks.map((block, i) => (
+            <BlockView
+              key={i}
+              block={block} session={session} store={store} date={date} timer={setTimer.timer}
+              {...handlers}
+              onAddRound={(b: Block) => dispatch({
+                type: 'addRound', date, day,
+                exIds: b.exercises.map((x) => x.id), defaults: defaultsFor,
+              })}
+              onRemoveRound={(b: Block) => {
+                const min = b.exercises.reduce((n, ex) => Math.max(n, setsOf(session, ex).length), 1);
+                if (min <= 1) { setToast('Keep at least one round'); setTimeout(() => setToast(''), 1800); return; }
+                dispatch({ type: 'removeRound', date, day, exIds: b.exercises.map((x) => x.id) });
+              }}
+            />
+          )) : (
+            <SessionOverview
+              blocks={tpl.blocks} session={session} store={store} date={date}
+              onOpen={setOpenIndex}
+            />
+          )}
+        </>
+      ) : (
+        <ExerciseDetail
+          current={flat[openIndex]}
+          next={flat[openIndex + 1] ?? null}
+          prev={flat[openIndex - 1] ?? null}
+          session={session} store={store} date={date} timer={setTimer.timer}
+          {...handlers}
+          onGo={setOpenIndex}
+          onClose={() => setOpenIndex(null)}
         />
-      ))}
+      )}
 
       <h3>Session notes</h3>
       <textarea
