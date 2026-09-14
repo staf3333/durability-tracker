@@ -16,13 +16,15 @@ export function ExerciseLabel({ ex }: { ex: Exercise }) {
 
 /** Numeric field with −/+ steppers. Typing still works; the buttons are for gym use. */
 function Stepper({
-  value, onChange, step, placeholder, label, decimal,
+  value, onChange, step, placeholder, label, caption, decimal,
 }: {
   value: string;
   onChange: (v: string) => void;
   step: number;
   placeholder?: string;
   label: string;
+  /** Visible unit shown on the control, e.g. reps or lb. */
+  caption: string;
   decimal?: boolean;
 }) {
   const nudge = (dir: number) => {
@@ -31,16 +33,19 @@ function Stepper({
     onChange(String(Number(next.toFixed(2))));
   };
   return (
-    <div className="step">
-      <button onClick={() => nudge(-1)} aria-label={`Decrease ${label}`}>−</button>
-      <input
-        inputMode={decimal ? 'decimal' : 'numeric'}
-        value={value}
-        placeholder={placeholder ?? ''}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={label}
-      />
-      <button onClick={() => nudge(1)} aria-label={`Increase ${label}`}>+</button>
+    <div className="field">
+      <span className="cap">{caption}</span>
+      <div className="step">
+        <button onClick={() => nudge(-1)} aria-label={`Decrease ${label}`}>−</button>
+        <input
+          inputMode={decimal ? 'decimal' : 'numeric'}
+          value={value}
+          placeholder={placeholder ?? ''}
+          onChange={(e) => onChange(e.target.value)}
+          aria-label={label}
+        />
+        <button onClick={() => nudge(1)} aria-label={`Increase ${label}`}>+</button>
+      </div>
     </div>
   );
 }
@@ -83,19 +88,24 @@ export function SetRow({
       )}
 
       {timed ? (
-        <input
-          inputMode="numeric"
-          placeholder={past?.reps || 'time'}
-          value={entry.reps}
-          onChange={(e) => onField('reps', e.target.value)}
-          aria-label={`${ex.name} set ${index + 1} reps`}
-        />
+        <div className="field">
+          <span className="cap">time</span>
+          <input
+            className="tfield"
+            inputMode="numeric"
+            placeholder={past?.reps || 'mm:ss'}
+            value={entry.reps}
+            onChange={(e) => onField('reps', e.target.value)}
+            aria-label={`${ex.name} set ${index + 1} reps`}
+          />
+        </div>
       ) : (
         <Stepper
           value={entry.reps}
           placeholder={past?.reps}
           onChange={(v) => onField('reps', v)}
           step={1}
+          caption="reps"
           label={`${ex.name} set ${index + 1} reps`}
         />
       )}
@@ -107,6 +117,7 @@ export function SetRow({
           onChange={(v) => onField('load', v)}
           step={5}
           decimal
+          caption="lb"
           label={`${ex.name} set ${index + 1} load`}
         />
       )}

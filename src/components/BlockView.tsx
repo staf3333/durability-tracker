@@ -94,12 +94,22 @@ export function BlockView(p: Props) {
         <ul className="glist">
           {block.exercises.map((ex) => {
             const past = lastPerformance(p.store, p.date, ex.id);
+            const count = setsOf(session, ex).length;
             return (
               <li key={ex.id}>
                 <b><ExerciseLabel ex={ex} /></b>
                 <em>{ex.sets} × {ex.target}</em>
                 {ex.note && <small>{ex.note}</small>}
                 {past && <small className="last"><b>{past.imported ? 'PJF' : 'last'}</b> {summarisePast(past)} · {past.imported ? past.date : past.date.slice(5).replace('-', '/')}</small>}
+                <div className="exsets">
+                  <span>{count} set{count === 1 ? '' : 's'}</span>
+                  <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}
+                    aria-label={`Add a set to ${ex.name}`}>+ set</button>
+                  {count > 1 && (
+                    <button className="mini" onClick={() => p.onRemoveSet(ex.id, count - 1)}
+                      aria-label={`Remove a set from ${ex.name}`}>− set</button>
+                  )}
+                </div>
               </li>
             );
           })}
@@ -113,7 +123,7 @@ export function BlockView(p: Props) {
             <div key={r} className={`round${allDone ? ' done' : ''}`} data-r={r}>
               <div className="rlab">
                 Round {r + 1}
-                {partial && <em> · {members.map((m) => m.name).join(' only')}</em>}
+                {partial && <em> · {members.map((m) => m.name).join(', ')} only</em>}
               </div>
               {members.map((ex) => (
                 <SetRow
@@ -136,8 +146,8 @@ export function BlockView(p: Props) {
         })}
 
         <div className="exbtns">
-          <button className="mini" onClick={() => p.onAddRound(block)}>+ round</button>
-          <button className="mini" onClick={() => p.onRemoveRound(block)}>− round</button>
+          <button className="mini" onClick={() => p.onAddRound(block)}>+ round (all)</button>
+          <button className="mini" onClick={() => p.onRemoveRound(block)}>− round (all)</button>
         </div>
       </div>
     </div>

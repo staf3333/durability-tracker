@@ -181,9 +181,9 @@ describe('logging', () => {
     await pick('mon');
     // scope to the superset — the Block 1 circuit also renders round controls
     const group = () => document.querySelectorAll('.grp.superset')[0] as HTMLElement;
-    await userEvent.click(within(group()).getByText('+ round'));
+    await userEvent.click(within(group()).getByText('+ round (all)'));
     expect(group().querySelectorAll('.round')).toHaveLength(4);
-    await userEvent.click(within(group()).getByText('− round'));
+    await userEvent.click(within(group()).getByText('− round (all)'));
     expect(group().querySelectorAll('.round')).toHaveLength(3);
   });
 });
@@ -663,5 +663,86 @@ describe('exercise history', () => {
     await pick('mon');
     const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
     expect(card.querySelector('.exhist')).toBeNull();
+  });
+});
+
+/* ---------- per-exercise sets inside a superset ---------- */
+describe('uneven sets within a group', () => {
+  const group = () => document.querySelectorAll('.grp.superset')[0] as HTMLElement;
+
+  it('adds a set to one exercise without touching its partner', async () => {
+    render(<App />);
+    await pick('mon');
+    await userEvent.click(within(group()).getByLabelText(/Add a set to Soleus Raise/i));
+
+    const store = read();
+    const key = Object.keys(store.sessions)[0];
+    expect(store.sessions[key].exercises.soleus).toHaveLength(4);
+    expect(store.sessions[key].exercises.razor ?? []).toHaveLength(0);
+  });
+
+  it('renders the extra set as a round containing only that exercise', async () => {
+    render(<App />);
+    await pick('mon');
+    await userEvent.click(within(group()).getByLabelText(/Add a set to Soleus Raise/i));
+
+    const rounds = group().querySelectorAll('.round');
+    expect(rounds).toHaveLength(4);
+    const last = rounds[3];
+    expect(last.querySelectorAll('.grow')).toHaveLength(1);
+    expect(last.querySelector('.grow')!.getAttribute('data-ex')).toBe('soleus');
+    expect(last.querySelector('.rlab')!.textContent).toMatch(/Soleus Raise only/);
+  });
+
+  it('lets the extra set be logged independently, for per-side tracking', async () => {
+    render(<App />);
+    await pick('mon');
+    await userEvent.click(within(group()).getByLabelText(/Add a set to Soleus Raise/i));
+
+    const rows = group().querySelectorAll('[data-ex="soleus"]');
+    await userEvent.type(within(rows[0] as HTMLElement).getByLabelText(/^Soleus Raise set 1 reps$/i), '12');
+    await userEvent.type(within(rows[3] as HTMLElement).getByLabelText(/^Soleus Raise set 4 reps$/i), '9');
+
+    const store = read();
+    const sets = store.sessions[Object.keys(store.sessions)[0]].exercises.soleus;
+    expect(sets[0].reps).toBe('12');
+    expect(sets[3].reps).toBe('9');
+  });
+
+  it('removes a set from one exercise only', async () => {
+    render(<App />);
+    await pick('mon');
+    await userEvent.click(within(group()).getByLabelText(/Add a set to Soleus Raise/i));
+    await userEvent.click(within(group()).getByLabelText(/Remove a set from Soleus Raise/i));
+    const store = read();
+    expect(store.sessions[Object.keys(store.sessions)[0]].exercises.soleus).toHaveLength(3);
+  });
+});
+
+/* ---------- fields say what they want ---------- */
+describe('field labels', () => {
+  it('labels reps and load on a weighted lift', async () => {
+    render(<App />);
+    await pick('mon');
+    const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
+    const caps = [...card.querySelectorAll('.setrow')[0].querySelectorAll('.cap')]
+      .map((c) => c.textContent);
+    expect(caps).toEqual(['reps', 'lb']);
+  });
+
+  it('labels a timed exercise as time and hints the format', async () => {
+    render(<App />);
+    await pick('thu');
+    const row = document.querySelector('[data-ex="slantiso"][data-i="0"]') as HTMLElement;
+    expect(row.querySelector('.cap')!.textContent).toBe('time');
+    expect(row.querySelector('input.tfield')).toHaveAttribute('placeholder', 'mm:ss');
+  });
+
+  it('shows no load field on a bodyweight exercise', async () => {
+    render(<App />);
+    await pick('thu');
+    const row = document.querySelector('[data-ex="inv"][data-i="0"]') as HTMLElement;
+    const caps = [...row.querySelectorAll('.cap')].map((c) => c.textContent);
+    expect(caps).toEqual(['reps']);
   });
 });

@@ -209,3 +209,22 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
   color:#8a7a4a;background:#fdf6e3;padding:1px 6px;border-radius:3px}
 .hrow.mine .hsrc{color:var(--green-d);background:#e8f3e4}
 .hnote{flex:1 1 100%;color:var(--muted);font-size:.76rem;font-style:italic}
+
+/* labelled fields */
+.field{flex:1 1 76px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.field .cap{font-size:.6rem;font-weight:800;letter-spacing:.7px;text-transform:uppercase;
+  color:var(--muted);padding-left:2px}
+.field .step{flex:none;width:100%}
+.field input.tfield{width:100%;height:38px;border:1px solid var(--line);border-radius:6px;
+  text-align:center;font:inherit;font-size:.9rem;background:#fff;
+  font-variant-numeric:tabular-nums;padding:0 4px}
+.field input.tfield:focus{outline:2px solid var(--green);outline-offset:-2px}
+.setrow{align-items:flex-end}
+.setrow span.n{padding-bottom:10px}
+.gname{padding-bottom:10px}
+.tick,.rm,.stimer{margin-bottom:0}
+
+/* per-exercise set controls inside a group */
+.exsets{display:flex;align-items:center;gap:7px;margin-top:7px}
+.exsets span{font-size:.72rem;color:var(--muted);font-weight:600}
+.exsets .mini{padding:4px 9px;font-size:.72rem}
