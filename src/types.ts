@@ -89,6 +89,14 @@ export interface HistoryEntry {
   archive?: Array<{ date: string; source: string; sets: SetEntry[]; note?: string }>;
 }
 
+/** User overrides for which fields an exercise tracks. */
+export interface ExercisePref {
+  /** Show a load field even when the template does not ask for one. */
+  load?: boolean;
+  /** Work-timer duration in seconds; null removes a timer the template defines. */
+  seconds?: number | null;
+}
+
 export interface Store {
   version: 4;
   sessions: Record<string, Session>;
@@ -99,4 +107,6 @@ export interface Store {
    */
   history: Record<string, HistoryEntry>;
   sync: SyncState;
+  /** exerciseId -> field overrides. Optional so older stores load unchanged. */
+  prefs?: Record<string, ExercisePref>;
 }

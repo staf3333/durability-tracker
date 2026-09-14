@@ -1,7 +1,9 @@
-import { PJF, fmtSec, lastPerformance, setsOf, summarisePast } from '../lib/plan';
+import { useState } from 'react';
+import { PJF, effective, fmtSec, lastPerformance, setsOf, summarisePast } from '../lib/plan';
 import type { FlatExercise } from '../lib/session';
-import type { Session, Store } from '../types';
+import type { ExercisePref, Session, Store } from '../types';
 import { SetRow } from './SetRow';
+import { ExerciseHistory } from './ExerciseHistory';
 import type { TimerState } from './Timers';
 
 interface Props {
@@ -18,25 +20,37 @@ interface Props {
   onAddSet: (exId: string, defaults: number) => void;
   onRemoveSet: (exId: string, i: number) => void;
   onRest: (seconds: number) => void;
+  onPref: (exId: string, pref: ExercisePref) => void;
   onGo: (index: number) => void;
   onClose: () => void;
 }
 
-/**
- * One exercise at a time: large controls for logging, and a bottom bar that
- * moves through the session in order so you never hunt for your place.
- */
+type Panel = 'none' | 'settings' | 'history';
+
 export function ExerciseDetail(p: Props) {
-  const { ex, block } = p.current;
+  const [panel, setPanel] = useState<Panel>('none');
+  const base = p.current.ex;
+  const ex = effective(base, p.store);
+  const { block } = p.current;
   const sets = setsOf(p.session, ex);
   const past = lastPerformance(p.store, p.date, ex.id);
   const grouped = block.mode !== 'straight';
+  const unit = grouped ? 'round' : 'set';
+
+  const toggle = (next: Panel) => setPanel((cur) => (cur === next ? 'none' : next));
 
   return (
     <div className="detail">
-      <div className="dhead">
-        <button className="dback" onClick={p.onClose} aria-label="Back to the session list">‹ Session</button>
-        <span className="dpos">{p.current.index + 1}</span>
+      <div className="dbar">
+        <button className="dback" onClick={p.onClose} aria-label="Back to the session list">
+          <span aria-hidden>‹</span> Session
+        </button>
+        <div className="dtools">
+          <button className={panel === 'settings' ? 'on' : ''} onClick={() => toggle('settings')}
+            aria-label="Exercise settings" aria-pressed={panel === 'settings'}>⚙</button>
+          <button className={panel === 'history' ? 'on' : ''} onClick={() => toggle('history')}
+            aria-label="Exercise history" aria-pressed={panel === 'history'}>🕘</button>
+        </div>
       </div>
 
       <h2 className="dname">
@@ -50,6 +64,66 @@ export function ExerciseDetail(p: Props) {
         {ex.optional && <span className="flag opt">OPTIONAL</span>}
         <span className="dtarget">{ex.sets} × {ex.target}</span>
       </div>
+
+      {panel === 'settings' && (
+        <div className="panel" role="group" aria-label="Exercise settings">
+          <div className="ptitle">What this exercise tracks</div>
+
+          <label className="prow">
+            <input type="checkbox" checked readOnly disabled />
+            <span>Reps<small>always tracked</small></span>
+          </label>
+
+          <label className="prow">
+            <input
+              type="checkbox"
+              checked={!!ex.weight}
+              onChange={(e) => p.onPref(ex.id, { load: e.target.checked })}
+              aria-label="Track load"
+            />
+            <span>Load<small>adds a lb field</small></span>
+          </label>
+
+          <label className="prow">
+            <input
+              type="checkbox"
+              checked={ex.seconds != null}
+              onChange={(e) => p.onPref(ex.id, { seconds: e.target.checked ? (base.seconds ?? 30) : null })}
+              aria-label="Track time"
+            />
+            <span>Time<small>adds a countdown to each {unit}</small></span>
+          </label>
+
+          {ex.seconds != null && (
+            <label className="prow num">
+              <span>Duration</span>
+              <input
+                type="number" min="5" step="5" value={ex.seconds}
+                onChange={(e) => p.onPref(ex.id, { seconds: Math.max(5, +e.target.value || 5) })}
+                aria-label="Timer duration in seconds"
+              />
+              <small>seconds</small>
+            </label>
+          )}
+
+          <div className="ptitle">{grouped ? 'Rounds' : 'Sets'}</div>
+          <div className="pbtns">
+            <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ add {unit}</button>
+            {sets.length > 1 && (
+              <button className="mini" onClick={() => p.onRemoveSet(ex.id, sets.length - 1)}>
+                − remove {unit}
+              </button>
+            )}
+            <span className="pcount">{sets.length} {unit}{sets.length === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+      )}
+
+      {panel === 'history' && (
+        <div className="panel" role="group" aria-label="Exercise history">
+          <ExerciseHistory exId={ex.id} store={p.store} startOpen />
+        </div>
+      )}
 
       {ex.note && <p className="dnote">{ex.note}</p>}
 
@@ -66,7 +140,7 @@ export function ExerciseDetail(p: Props) {
             {grouped ? `Round ${i + 1}` : `Set ${i + 1}`}
             {sets.length > 1 && (
               <button className="mini" onClick={() => p.onRemoveSet(ex.id, i)}
-                aria-label={`Remove ${grouped ? 'round' : 'set'} ${i + 1}`}>remove</button>
+                aria-label={`Remove ${unit} ${i + 1}`}>remove</button>
             )}
           </div>
           <SetRow
@@ -79,9 +153,7 @@ export function ExerciseDetail(p: Props) {
       ))}
 
       <div className="dbtns">
-        <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>
-          + {grouped ? 'round' : 'set'}
-        </button>
+        <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ {unit}</button>
         {ex.rest && (
           <button className="mini" onClick={() => p.onRest(ex.rest!)}>rest {fmtSec(ex.rest)}</button>
         )}
@@ -92,15 +164,14 @@ export function ExerciseDetail(p: Props) {
           ? <button className="unprev" onClick={() => p.onGo(p.prev!.index)} aria-label="Previous exercise">‹</button>
           : <span className="unprev" />}
         <div className="unbody">
-          <span className="unlabel">Up next</span>
+          <span className="unlabel">
+            {grouped && p.next && p.next.blockIndex === p.current.blockIndex
+              ? 'Next in superset' : 'Up next'}
+          </span>
           <span className="unname">{p.next ? p.next.ex.name : 'Last exercise'}</span>
         </div>
-        <button
-          className="unnext"
-          disabled={!p.next}
-          onClick={() => p.next && p.onGo(p.next.index)}
-          aria-label="Next exercise"
-        >
+        <button className="unnext" disabled={!p.next}
+          onClick={() => p.next && p.onGo(p.next.index)} aria-label="Next exercise">
           →<small>NEXT</small>
         </button>
       </div>

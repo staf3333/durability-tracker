@@ -6,7 +6,7 @@ import { countDone, sessionHasData, sessionVolume, setsOf } from '../lib/plan';
 import { BlockView } from './BlockView';
 import { SessionOverview } from './SessionOverview';
 import { ExerciseDetail } from './ExerciseDetail';
-import { flatten } from '../lib/session';
+import { flatten, nextIndex, prevIndex } from '../lib/session';
 import { RestBar, useCountdown } from './Timers';
 import { fmtSec } from '../lib/plan';
 
@@ -56,6 +56,8 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
     onRemoveSet: (exId: string, index: number) =>
       dispatch({ type: 'removeSet', date, day, exId, index }),
     onRest: (sec: number) => rest.toggle('rest', sec),
+    onPref: (exId: string, pref: import('../types').ExercisePref) =>
+      dispatch({ type: 'setExercisePref', exId, pref }),
   };
 
   const defaultsFor = useMemo(() => {
@@ -135,8 +137,8 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
       ) : (
         <ExerciseDetail
           current={flat[openIndex]}
-          next={flat[openIndex + 1] ?? null}
-          prev={flat[openIndex - 1] ?? null}
+          next={(() => { const n = nextIndex(flat, openIndex, session); return n == null ? null : flat[n]; })()}
+          prev={(() => { const n = prevIndex(openIndex); return n == null ? null : flat[n]; })()}
           session={session} store={store} date={date} timer={setTimer.timer}
           {...handlers}
           onGo={setOpenIndex}

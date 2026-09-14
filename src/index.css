@@ -295,11 +295,37 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
 
 /* ---------- exercise detail ---------- */
 .detail{padding-bottom:84px}
-.dhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.dback{border:0;background:none;font:inherit;font-size:.92rem;color:var(--green-d);
-  cursor:pointer;padding:6px 0;font-weight:600}
-.dpos{font-size:.74rem;color:var(--muted);font-weight:700;background:#f0f0f0;
-  border-radius:12px;padding:3px 10px}
+.dbar{display:flex;align-items:center;gap:10px;margin:0 -14px 14px;padding:0 14px 11px;
+  border-bottom:1px solid var(--line)}
+.dback{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);
+  background:#fff;border-radius:8px;font:inherit;font-size:.86rem;color:var(--ink);
+  cursor:pointer;padding:8px 14px;font-weight:600}
+.dback span{font-size:1.15rem;line-height:1;color:var(--green-d)}
+.dback:active{background:#f2f2f2}
+.dtools{margin-left:auto;display:flex;gap:6px}
+.dtools button{width:40px;height:38px;border:1px solid var(--line);background:#fff;
+  border-radius:8px;font-size:1rem;cursor:pointer;line-height:1}
+.dtools button.on{background:var(--ink);border-color:var(--ink)}
+
+/* settings and history panels */
+.panel{border:1px solid var(--line);border-radius:8px;background:#fafafa;
+  padding:12px 14px;margin:0 0 16px}
+.ptitle{font-size:.66rem;font-weight:800;letter-spacing:.8px;text-transform:uppercase;
+  color:var(--muted);margin:2px 0 8px}
+.ptitle:not(:first-child){margin-top:16px}
+.prow{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:.92rem;cursor:pointer}
+.prow input[type=checkbox]{width:20px;height:20px;accent-color:var(--green);flex:0 0 auto}
+.prow span{display:flex;flex-direction:column;font-weight:600}
+.prow small{font-weight:400;color:var(--muted);font-size:.76rem}
+.prow.num{gap:8px}
+.prow.num span{flex-direction:row;font-weight:600}
+.prow.num input[type=number]{width:84px;height:34px;border:1px solid var(--line);
+  border-radius:6px;text-align:center;font:inherit}
+.prow.num small{color:var(--muted)}
+.pbtns{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pcount{font-size:.78rem;color:var(--muted);font-weight:600}
+.panel .exhist{padding:0;margin:0}
+.panel .hlist{margin-top:0;max-height:320px}
 .dname{font-size:1.4rem;margin:0 0 8px;line-height:1.2}
 .dname a{color:var(--green-d);text-decoration:none}
 .dflags{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:10px}

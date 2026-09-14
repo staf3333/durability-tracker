@@ -19,8 +19,10 @@ const topLoad = (sets: SetEntry[]) =>
  * Every recorded performance of one exercise: sessions logged in the app plus
  * anything imported. Imported rows are marked, never silently blended in.
  */
-export function ExerciseHistory({ exId, store }: { exId: string; store: Store }) {
-  const [open, setOpen] = useState(false);
+export function ExerciseHistory(
+  { exId, store, startOpen = false }: { exId: string; store: Store; startOpen?: boolean },
+) {
+  const [open, setOpen] = useState(startOpen);
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];
@@ -42,15 +44,21 @@ export function ExerciseHistory({ exId, store }: { exId: string; store: Store })
     return out.sort((a, b) => b.date.localeCompare(a.date));
   }, [exId, store]);
 
-  if (!rows.length) return null;
+  if (!rows.length) {
+    return startOpen
+      ? <div className="empty">No recorded sessions for this exercise yet.</div>
+      : null;
+  }
 
   const best = rows.reduce((m, r) => Math.max(m, topLoad(r.sets)), 0);
 
   return (
     <div className="exhist">
-      <button className="mini hbtn" onClick={() => setOpen((o) => !o)}>
-        {open ? '▾' : '▸'} history · {rows.length}
-      </button>
+      {!startOpen && (
+        <button className="mini hbtn" onClick={() => setOpen((o) => !o)}>
+          {open ? '▾' : '▸'} history · {rows.length}
+        </button>
+      )}
 
       {open && (
         <div className="hlist">

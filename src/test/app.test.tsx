@@ -892,9 +892,9 @@ describe('exercise detail', () => {
       .toMatch(/Split Stance Loaded Hip Rotations/);
   });
 
-  it('disables Up next on the final exercise', async () => {
+  it('disables Up next only when nothing is left', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'sun');
     const rows = document.querySelectorAll('.orow');
     await userEvent.click(rows[rows.length - 1]);
     expect(screen.getByLabelText(/Next exercise/i)).toBeDisabled();
@@ -907,5 +907,139 @@ describe('exercise detail', () => {
     await userEvent.click(screen.getByLabelText(/Back to the session list/i));
     expect(document.querySelector('.ovw')).toBeInTheDocument();
     expect(document.querySelector('.detail')).toBeNull();
+  });
+});
+
+/* ---------- supersets cycle instead of dead-ending ---------- */
+describe('superset navigation', () => {
+  const openEx = async (day: string, name: string) => {
+    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes(name))!);
+  };
+
+  it('cycles back to the partner instead of leaving the group', async () => {
+    render(<App />);
+    await openEx('mon', 'Soleus Raise');           // second member of Superset A
+    expect(document.querySelector('.unname')!.textContent).toMatch(/Razor Curl Progressions/);
+    expect(document.querySelector('.unlabel')!.textContent).toMatch(/Next in superset/i);
+  });
+
+  it('walks A to B within the group', async () => {
+    render(<App />);
+    await openEx('mon', 'Razor Curl Progressions');
+    expect(document.querySelector('.unname')!.textContent).toMatch(/Soleus Raise/);
+    await userEvent.click(screen.getByLabelText(/Next exercise/i));
+    expect(document.querySelector('.dname')!.textContent).toMatch(/Soleus Raise/);
+  });
+
+  it('leaves the group once every set in it is ticked', async () => {
+    render(<App />);
+    await openEx('mon', 'Razor Curl Progressions');
+    // finish this exercise
+    for (const t of document.querySelectorAll('.dset .tick')) await userEvent.click(t);
+    await userEvent.click(screen.getByLabelText(/Next exercise/i));
+    // finish the partner
+    for (const t of document.querySelectorAll('.dset .tick')) await userEvent.click(t);
+    expect(document.querySelector('.unlabel')!.textContent).toMatch(/Up next/i);
+    expect(document.querySelector('.unname')!.textContent)
+      .not.toMatch(/Razor Curl Progressions/);
+  });
+
+  it('a straight block still advances linearly', async () => {
+    render(<App />);
+    await openEx('mon', 'Heels Elevated Narrow Squat');
+    expect(document.querySelector('.unname')!.textContent)
+      .toMatch(/Single Leg Full Range Step Downs/);
+  });
+});
+
+/* ---------- per-exercise settings ---------- */
+describe('exercise settings', () => {
+  const openEx = async (day: string, name: string) => {
+    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes(name))!);
+    await userEvent.click(screen.getByLabelText(/Exercise settings/i));
+  };
+
+  it('adds a load field to a bodyweight exercise', async () => {
+    render(<App />);
+    await openEx('mon', 'Razor Curl Progressions');
+    expect(document.querySelector('.dset [aria-label*="load"]')).toBeNull();
+    await userEvent.click(screen.getByLabelText('Track load'));
+    expect(document.querySelector('.dset [aria-label*="load"]')).toBeInTheDocument();
+    expect(read().prefs!.razor.load).toBe(true);
+  });
+
+  it('adds a timer and lets the duration be set', async () => {
+    render(<App />);
+    await openEx('mon', 'Razor Curl Progressions');
+    await userEvent.click(screen.getByLabelText('Track time'));
+    expect(document.querySelector('.dset .stimer')).toBeInTheDocument();
+    const dur = screen.getByLabelText(/Timer duration/i);
+    fireEvent.change(dur, { target: { value: '45' } });
+    expect(read().prefs!.razor.seconds).toBe(45);
+    expect(document.querySelector('.dset .stimer')!.textContent).toMatch(/0:45/);
+  });
+
+  it('removes a timer the template defined', async () => {
+    render(<App />);
+    await openEx('thu', 'Slant Board Isometric Progressions');
+    expect(document.querySelector('.dset .stimer')).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Track time'));
+    expect(document.querySelector('.dset .stimer')).toBeNull();
+    expect(read().prefs!.slantiso.seconds).toBeNull();
+  });
+
+  it('adds and removes sets from the settings panel', async () => {
+    render(<App />);
+    await openEx('mon', 'Heels Elevated Narrow Squat');
+    await userEvent.click(screen.getByText(/\+ add set/i));
+    expect(document.querySelectorAll('.dset')).toHaveLength(5);
+    await userEvent.click(screen.getByText(/− remove set/i));
+    expect(document.querySelectorAll('.dset')).toHaveLength(4);
+  });
+
+  it('calls them rounds inside a superset', async () => {
+    render(<App />);
+    await openEx('mon', 'Soleus Raise');
+    expect(screen.getByText(/\+ add round/i)).toBeInTheDocument();
+  });
+});
+
+/* ---------- history from the detail view ---------- */
+describe('exercise history panel', () => {
+  it('opens expanded with past performances and notes', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, sync: emptySync, sessions: {}, prefs: {},
+      history: {
+        hens: {
+          date: '2026-04-17', source: 'Vert Code Elite', note: 'felt it for sure',
+          sets: [{ reps: '8', load: '90', done: true }],
+          archive: [{ date: '2025-04-28', source: 'Vert Code Elite',
+                      sets: [{ reps: '8', load: '115', done: true }] }],
+        },
+      },
+    }));
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Heels Elevated Narrow Squat'))!);
+    await userEvent.click(screen.getByLabelText(/Exercise history/i));
+
+    const panel = document.querySelector('.panel')!;
+    expect(panel.textContent).toMatch(/115 lb/);
+    expect(panel.textContent).toMatch(/felt it for sure/);
+    expect(panel.querySelectorAll('.hrow')).toHaveLength(2);
+  });
+
+  it('says so when there is nothing recorded', async () => {
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Razor Curl'))!);
+    await userEvent.click(screen.getByLabelText(/Exercise history/i));
+    expect(document.querySelector('.panel')!.textContent).toMatch(/No recorded sessions/i);
   });
 });

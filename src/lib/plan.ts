@@ -152,3 +152,16 @@ export function previousSession(store: Store, date: string) {
   }
   return null;
 }
+
+/** Template definition with the user's field overrides applied. */
+export function effective(ex: Exercise, store: Store): Exercise {
+  const pref = store.prefs?.[ex.id];
+  if (!pref) return ex;
+  const out: Exercise = { ...ex };
+  if (pref.load !== undefined) out.weight = pref.load;
+  if (pref.seconds !== undefined) {
+    if (pref.seconds === null) delete out.seconds;
+    else out.seconds = pref.seconds;
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, type ReactNode } from 'react';
-import type { HistoryEntry, Readiness, Session, SetEntry, Store, SyncState } from '../types';
+import type { ExercisePref, HistoryEntry, Readiness, Session, SetEntry, Store, SyncState } from '../types';
 import { TEMPLATES } from '../data/templates';
 
 const KEY = 'dtrack.v1';
@@ -29,10 +29,11 @@ export type Action =
       deleted: string[]; serverTime: string }
   | { type: 'setConflict'; date: string; mine: Session | null }
   | { type: 'setSyncError'; message: string | null }
+  | { type: 'setExercisePref'; exId: string; pref: ExercisePref }
   | { type: 'wipe' };
 
 export const emptySync: SyncState = { userId: null, lastSyncedAt: null, pending: {}, lastError: null };
-export const emptyStore: Store = { version: 4, sessions: {}, history: {}, sync: emptySync };
+export const emptyStore: Store = { version: 4, sessions: {}, history: {}, sync: emptySync, prefs: {} };
 
 /**
  * Actions carry the timestamp rather than the reducer reading the clock. Keeps
@@ -135,6 +136,14 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
       const pending = { ...store.sync.pending };
       action.dates.forEach((d) => delete pending[d]);
       return { ...store, sync: { ...store.sync, pending, lastSyncedAt: action.serverTime, lastError: null } };
+    }
+    case 'setExercisePref': {
+      const prefs = { ...(store.prefs ?? {}) };
+      const merged = { ...(prefs[action.exId] ?? {}), ...action.pref };
+      // Drop keys that match the template default so prefs stay minimal.
+      if (merged.load === undefined && merged.seconds === undefined) delete prefs[action.exId];
+      else prefs[action.exId] = merged;
+      return { ...store, prefs };
     }
     case 'setUser':
       return { ...store, sync: { ...store.sync, userId: action.userId } };
