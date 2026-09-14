@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from './store';
-import { AuthRequiredError, httpApi, runSync, type SyncApi } from '../lib/sync';
+import { httpApi, isAuthRequired, runSync, type SyncApi } from '../lib/sync';
 
 export type SyncStatus =
   | 'idle' | 'syncing' | 'offline' | 'signedOut' | 'error' | 'wrongAccount';
@@ -61,7 +61,7 @@ export function useSync(api: SyncApi = httpApi) {
       })
       .catch((err) => {
         if (cancelled) return;
-        setStatus(err instanceof AuthRequiredError ? 'signedOut' : 'error');
+        setStatus(isAuthRequired(err) ? 'signedOut' : 'error');
       });
     return () => { cancelled = true; };
   }, [api, dispatch]);

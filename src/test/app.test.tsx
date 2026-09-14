@@ -746,3 +746,52 @@ describe('field labels', () => {
     expect(caps).toEqual(['reps']);
   });
 });
+
+/* ---------- signed-out is a state, not a failure ---------- */
+describe('sync status', () => {
+  it('reads identity from the platform endpoint, not from an API 401', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify({ clientPrincipal: null }), { status: 200 });
+    }));
+    render(<App />);
+    await act(async () => { await Promise.resolve(); });
+    expect(calls.some((c) => c.includes('/.auth/me'))).toBe(true);
+  });
+
+  it('shows Sign in rather than Sync failed when there is no principal', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () =>
+      new Response(JSON.stringify({ clientPrincipal: null }), { status: 200 })));
+    render(<App />);
+    await act(async () => { await Promise.resolve(); });
+    const chip = document.querySelector('.sync')!;
+    expect(chip.textContent).toMatch(/sign in/i);
+    expect(chip.className).toMatch(/signedOut/);
+    expect(chip.textContent).not.toMatch(/failed/i);
+  });
+
+  it('reports a genuine failure as an error, not as signed out', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('boom', { status: 500 })));
+    render(<App />);
+    await act(async () => { await Promise.resolve(); });
+    expect(document.querySelector('.sync')!.className).toMatch(/error/);
+  });
+
+  it('recognises a signed-in principal', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (String(url).includes('/.auth/me')) {
+        return new Response(JSON.stringify({
+          clientPrincipal: { userId: 'abc123', identityProvider: 'github' },
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        serverTime: '2026-09-14T09:00:00.000Z', sessions: {}, history: {}, deleted: [],
+      }), { status: 200 });
+    }));
+    render(<App />);
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { await Promise.resolve(); });
+    expect(JSON.parse(localStorage.getItem('dtrack.v1')!).sync.userId).toBe('abc123');
+  });
+});

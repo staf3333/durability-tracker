@@ -24,8 +24,13 @@ export interface SyncApi {
 }
 
 export class AuthRequiredError extends Error {
+  /** Discriminant rather than instanceof: code-splitting can duplicate a class. */
+  readonly authRequired = true;
   constructor() { super('not_authenticated'); }
 }
+
+export const isAuthRequired = (e: unknown): boolean =>
+  !!e && typeof e === 'object' && (e as { authRequired?: boolean }).authRequired === true;
 
 async function handle(res: Response) {
   if (res.status === 401) throw new AuthRequiredError();
@@ -34,7 +39,19 @@ async function handle(res: Response) {
 }
 
 export const httpApi: SyncApi = {
-  me: () => fetch('/api/me', { headers: { accept: 'application/json' } }).then(handle),
+  /*
+   * /.auth/me is the platform endpoint: it always returns 200 and reports
+   * whether a principal exists. Inferring sign-in state from a 401 on /api
+   * conflates "signed out" with "something went wrong".
+   */
+  me: async () => {
+    const res = await fetch('/.auth/me', { headers: { accept: 'application/json' } });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    const body = await res.json();
+    const p = body?.clientPrincipal;
+    if (!p?.userId) throw new AuthRequiredError();
+    return { userId: p.userId, provider: p.identityProvider, serverTime: new Date().toISOString() };
+  },
   pull: (since) =>
     fetch(`/api/sync${since ? `?since=${encodeURIComponent(since)}` : ''}`).then(handle),
   push: (body) =>
@@ -116,7 +133,7 @@ export async function runSync(
       conflicts,
     };
   } catch (err) {
-    if (err instanceof AuthRequiredError) {
+    if (isAuthRequired(err)) {
       dispatch({ type: 'setSyncError', message: 'Sign in to sync' });
       return { status: 'auth', pushed, pulled: 0, conflicts, reason: 'not_authenticated' };
     }
