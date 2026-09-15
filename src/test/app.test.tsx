@@ -1043,3 +1043,44 @@ describe('exercise history panel', () => {
     expect(document.querySelector('.panel')!.textContent).toMatch(/No recorded sessions/i);
   });
 });
+
+/* ---------- the check-in must say what it is measuring ---------- */
+describe('check-in measurement conditions', () => {
+  const openCheckIn = async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Check-in' }));
+  };
+
+  it('specifies ankle pain is scored under load, not at rest', async () => {
+    await openCheckIn();
+    const label = screen.getByText(/R ankle pain/i).closest('label')!;
+    expect(label.textContent).toMatch(/knee-to-wall \+ 5 single-leg calf raises/i);
+    expect(label.textContent).toMatch(/not at rest/i);
+  });
+
+  it('names a repeatable tendon test', async () => {
+    await openCheckIn();
+    const label = screen.getByText(/L tendon pain/i).closest('label')!;
+    expect(label.textContent).toMatch(/single-leg decline squat/i);
+    expect(label.textContent).toMatch(/same depth/i);
+  });
+
+  it('defines morning stiffness', async () => {
+    await openCheckIn();
+    const label = screen.getByText(/AM stiffness/i).closest('label')!;
+    expect(label.textContent).toMatch(/until it eases/i);
+  });
+
+  it('standardises the knee-to-wall measurement', async () => {
+    await openCheckIn();
+    expect(screen.getByText(/Knee-to-wall R/i).closest('label')!.textContent)
+      .toMatch(/heel down, knee touching/i);
+    expect(screen.getByText(/Knee-to-wall L/i).closest('label')!.textContent)
+      .toMatch(/same foot position/i);
+  });
+
+  it('distinguishes a pinch from an ache', async () => {
+    await openCheckIn();
+    expect(document.body.textContent).toMatch(/pinches at end range rather than aching/i);
+  });
+});

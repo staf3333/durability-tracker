@@ -364,3 +364,5 @@ table.hist td{padding:9px 5px;border-bottom:1px solid var(--line)}
   font:inherit;font-size:1.1rem;cursor:pointer}
 .unnext small{font-size:.56rem;font-weight:800;letter-spacing:.8px}
 .unnext:disabled{background:#ddd;color:#999;cursor:default}
+label.f .hint{display:block;font-style:normal;font-size:.74rem;color:var(--muted);
+  margin-top:4px;line-height:1.35}

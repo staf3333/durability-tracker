@@ -60,20 +60,35 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
         </div>
       )}
       <div className="grid2">
-        <label className="f"><span>Knee-to-wall R (cm)</span>
-          <input className="t" type="number" step="0.5" inputMode="decimal" value={f.ktwR ?? ''} onChange={set('ktwR')} /></label>
-        <label className="f"><span>Knee-to-wall L (cm)</span>
-          <input className="t" type="number" step="0.5" inputMode="decimal" value={f.ktwL ?? ''} onChange={set('ktwL')} /></label>
+        <label className="f">
+          <span>Knee-to-wall R (cm)</span>
+          <input className="t" type="number" step="0.5" inputMode="decimal" value={f.ktwR ?? ''} onChange={set('ktwR')} />
+          <em className="hint">Toe to wall, heel down, knee touching.</em>
+        </label>
+        <label className="f">
+          <span>Knee-to-wall L (cm)</span>
+          <input className="t" type="number" step="0.5" inputMode="decimal" value={f.ktwL ?? ''} onChange={set('ktwL')} />
+          <em className="hint">Same foot position every time.</em>
+        </label>
       </div>
       <div className="grid2">
-        <label className="f"><span>R ankle pain 0–10</span>
-          <input className="t" type="number" min="0" max="10" inputMode="numeric" value={f.anklePain ?? ''} onChange={set('anklePain')} /></label>
-        <label className="f"><span>L tendon pain 0–10</span>
-          <input className="t" type="number" min="0" max="10" inputMode="numeric" value={f.tendonPain ?? ''} onChange={set('tendonPain')} /></label>
+        <label className="f">
+          <span>R ankle pain 0–10</span>
+          <input className="t" type="number" min="0" max="10" inputMode="numeric" value={f.anklePain ?? ''} onChange={set('anklePain')} />
+          <em className="hint">During knee-to-wall + 5 single-leg calf raises. Not at rest.</em>
+        </label>
+        <label className="f">
+          <span>L tendon pain 0–10</span>
+          <input className="t" type="number" min="0" max="10" inputMode="numeric" value={f.tendonPain ?? ''} onChange={set('tendonPain')} />
+          <em className="hint">During a single-leg decline squat, same depth each time.</em>
+        </label>
       </div>
       <div className="grid2">
-        <label className="f"><span>AM stiffness (min)</span>
-          <input className="t" type="number" min="0" inputMode="numeric" value={f.amStiff ?? ''} onChange={set('amStiff')} /></label>
+        <label className="f">
+          <span>AM stiffness (min)</span>
+          <input className="t" type="number" min="0" inputMode="numeric" value={f.amStiff ?? ''} onChange={set('amStiff')} />
+          <em className="hint">Minutes from getting up until it eases.</em>
+        </label>
         <label className="f"><span>Ankle swelling?</span>
           <select className="t" value={f.swelling ?? 'no'} onChange={set('swelling')}>
             <option value="no">No</option><option value="yes">Yes</option>
@@ -94,7 +109,13 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
           placeholder="How the ankle and tendon actually feel…" /></label>
       <button className="btn" onClick={save}>Save check-in</button>
       <div className={`toast${msg ? ' on' : ''}`}>{msg}</div>
-      <div className="note" style={{ marginTop: 16 }}>
+      <div className="note warn" style={{ marginTop: 16 }}>
+        <b>Score under load, not at rest.</b> Resting pain tells you almost nothing here —
+        use the same provocation test each morning so the numbers are comparable. If the
+        ankle pinches at end range rather than aching, say so in the notes: those mean
+        different things.
+      </div>
+      <div className="note" style={{ marginTop: 12 }}>
         <b>Green</b> ankle ≤2/10, no swelling, KTW within ~5%; tendon ≤3 loading / ≤2 jumping.<br />
         <b>Yellow</b> pain 3–4 or rising, mild swelling, KTW down 5–10%.<br />
         <b>Red</b> pain &gt;4 or sharp, giving-way, new swelling, KTW down &gt;10%.
