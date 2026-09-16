@@ -36,11 +36,13 @@ const pick = async (day: string) => {
 
 /* ---------- content fidelity: the plan must survive the rewrite ---------- */
 describe('plan content', () => {
-  it('keeps all 8 sessions and 61 exercises', () => {
+  it('keeps all 8 sessions and every exercise', () => {
+    // Guards against silent deletion during template edits. Bump deliberately
+    // when exercises are added: 59 lower and rehab, 17 upper.
     const days = Object.keys(TEMPLATES);
     const exercises = days.flatMap((d) => TEMPLATES[d].blocks.flatMap((b) => b.exercises));
     expect(days).toHaveLength(8);
-    expect(exercises).toHaveLength(61);
+    expect(exercises).toHaveLength(76);
   });
 
   it('keeps Soleus Raise on both Monday and Wednesday', () => {
@@ -1258,5 +1260,68 @@ describe('dashboard', () => {
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
     expect(screen.getByText(/Nothing logged yet/i)).toBeInTheDocument();
+  });
+});
+
+/* ---------- upper body ---------- */
+describe('upper body sessions', () => {
+  it('puts an upper session on each of Tue, Thu and Sat', () => {
+    const titles = (d: string) => TEMPLATES[d].blocks.map((b) => b.title).join(' ');
+    expect(titles('tue')).toMatch(/Upper 1/);
+    expect(titles('thu')).toMatch(/Upper 2/);
+    expect(titles('sat')).toMatch(/Upper 3/);
+  });
+
+  it('keeps the lower-body and rehab work alongside it', () => {
+    const ids = (d: string) =>
+      TEMPLATES[d].blocks.flatMap((b) => b.exercises).map((x) => x.id);
+    expect(ids('tue')).toContain('wotw');        // shooting still there
+    expect(ids('thu')).toContain('slantiso');    // microdose still there
+    expect(ids('sat')).toContain('bball');       // basketball still there
+  });
+
+  it('tracks load on every upper lift', () => {
+    const upper = ['bench', 'incbench', 'dips', 'incfly', 'dbbench', 'milpress',
+      'latraise', 'reardelt', 'bicurl', 'tricep', 'hammer', 'incdbcurl',
+      'machrow', 'cgbench'];
+    const all = Object.values(TEMPLATES).flatMap((t) =>
+      t.blocks.flatMap((b) => b.exercises));
+    for (const id of upper) {
+      expect(all.find((x) => x.id === id)?.weight, id).toBe(true);
+    }
+  });
+
+  it('groups the delt and arm work as supersets', () => {
+    const thu = TEMPLATES.thu.blocks;
+    const delts = thu.find((b) => b.title.includes('delts'))!;
+    const arms = thu.find((b) => b.title.includes('arms'))!;
+    expect(delts.mode).toBe('superset');
+    expect(delts.exercises.map((x) => x.id)).toEqual(['latraise', 'reardelt']);
+    expect(arms.exercises.map((x) => x.id)).toEqual(['bicurl', 'tricep']);
+  });
+
+  it('carries no duplicate exercise ids across the whole plan', () => {
+    for (const [day, tpl] of Object.entries(TEMPLATES)) {
+      const ids = tpl.blocks.flatMap((b) => b.exercises).map((x) => x.id);
+      expect(new Set(ids).size, day).toBe(ids.length);
+    }
+  });
+
+  it('shows seeded upper history as last time', async () => {
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, sync: emptySync, sessions: {}, prefs: {},
+      history: {
+        bench: {
+          date: '2026-09-14', source: 'Upper programme',
+          sets: [{ reps: '5', load: '85', done: true }, { reps: '6', load: '90', done: true }],
+          archive: [],
+        },
+      },
+    }));
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'tue');
+    const row = [...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Bench Press'))!;
+    expect(row.querySelector('.olast')!.textContent).toMatch(/85×5, 90×6/);
   });
 });

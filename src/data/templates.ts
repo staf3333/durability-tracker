@@ -64,7 +64,7 @@ export const TEMPLATES: Record<string, Template> = {
     ],
   },
   tue: {
-    name: "Shooting + Upper Body",
+    name: "Shooting + Upper 1 (push)",
     sub: "WOTW game pace · microdose · upper after work",
     note: "Full-intent shooting day. Microdose is input, not fatigue — if sore, do mobility only.",
     blocks: [
@@ -86,10 +86,14 @@ export const TEMPLATES: Record<string, Template> = {
         ],
       },
       {
-        title: "After work",
+        title: "Upper 1 · push — after work",
         mode: "straight",
         exercises: [
-          { id: "upper", name: "Upper body", sets: 1, target: "—", note: "Your existing session" },
+          { id: "bench", name: "Bench Press", sets: 5, target: "5", weight: true, note: "Top set is the one to beat", rest: 180 },
+          { id: "incbench", name: "Incline Bench Press", sets: 5, target: "8-10", weight: true, rest: 120 },
+          { id: "dips", name: "Dips", sets: 4, target: "5", weight: true, note: "Added load, not bodyweight", rest: 120 },
+          { id: "incfly", name: "Incline Chest Fly", sets: 4, target: "10", weight: true, rest: 90 },
+          { id: "pushups", name: "Finisher Push-Ups", sets: 1, target: "AMRAP", optional: true },
         ],
       },
     ],
@@ -130,7 +134,7 @@ export const TEMPLATES: Record<string, Template> = {
     ],
   },
   thu: {
-    name: "Joint Juice + PT Microdose",
+    name: "Microdose + Upper 2 (mixed)",
     sub: "WOTW moderate · 15–20 min microdose · upper after work",
     note: "Recovery session, not a third leg day. Start the inversion and toe work light — irritated sheaths flare.",
     blocks: [
@@ -156,6 +160,31 @@ export const TEMPLATES: Record<string, Template> = {
           { id: "z2", name: "Zone 2 Workout", slug: "zone-2-workout", sets: 1, target: "10–20:00", note: "Skip if it adds fatigue", optional: true },
         ],
       },
+      {
+        title: "Upper 2 · mixed — after work",
+        mode: "straight",
+        exercises: [
+          { id: "dbbench", name: "Dumbbell Bench Press", sets: 3, target: "8-12", weight: true, rest: 120 },
+          { id: "pullups", name: "Pull-Ups", sets: 3, target: "8-12", weight: true, note: "Log added load; leave blank for bodyweight", rest: 120 },
+          { id: "milpress", name: "Military Press", sets: 5, target: "4-8", weight: true, rest: 150 },
+        ],
+      },
+      {
+        title: "Superset · delts",
+        mode: "superset",
+        exercises: [
+          { id: "latraise", name: "Lateral Raises", sets: 3, target: "12-15", weight: true, rest: 60 },
+          { id: "reardelt", name: "Rear Delt Raises", sets: 3, target: "12-15", weight: true, rest: 60 },
+        ],
+      },
+      {
+        title: "Superset · arms",
+        mode: "superset",
+        exercises: [
+          { id: "bicurl", name: "Biceps Curls", sets: 3, target: "12-15", weight: true, rest: 60 },
+          { id: "tricep", name: "Triceps Extensions", sets: 3, target: "12-15", weight: true, rest: 60 },
+        ],
+      },
     ],
   },
   fri: {
@@ -174,7 +203,7 @@ export const TEMPLATES: Record<string, Template> = {
     ],
   },
   sat: {
-    name: "Competitive Basketball",
+    name: "Basketball + Upper 3 (pull)",
     sub: "Highest intensity day",
     note: "This is where the real jumping stimulus lives. Upper body only if this morning left you Green.",
     blocks: [
@@ -183,7 +212,17 @@ export const TEMPLATES: Record<string, Template> = {
         mode: "straight",
         exercises: [
           { id: "bball", name: "Competitive basketball", sets: 1, target: "—", note: "Log minutes · RPE · hard/max jump attempts" },
-          { id: "upper", name: "Upper body", sets: 1, target: "—", note: "Green only", optional: true },
+        ],
+      },
+      {
+        title: "Upper 3 · pull — after basketball",
+        mode: "straight",
+        exercises: [
+          { id: "chinups", name: "Chin-Ups (underhand)", sets: 3, target: "6-10", weight: true, note: "Log added load, blank for bodyweight", rest: 120 },
+          { id: "hammer", name: "Hammer Curls", sets: 3, target: "10-12", weight: true, rest: 75 },
+          { id: "incdbcurl", name: "Incline DB Curls", sets: 3, target: "10-12", weight: true, rest: 75 },
+          { id: "machrow", name: "Seated Machine Row", sets: 3, target: "10-12", weight: true, rest: 90 },
+          { id: "cgbench", name: "Close-Grip Bench", sets: 3, target: "6-8", weight: true, rest: 150 },
         ],
       },
     ],
