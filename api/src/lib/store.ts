@@ -83,11 +83,44 @@ export async function upsertSession(
   return { accepted: true };
 }
 
+/**
+ * Table Storage caps a single string property at 64KB, and two years of
+ * imported history is larger than that. The blob is split across numbered
+ * properties within one entity, which keeps the write atomic and leaves room
+ * up to the 1MB per-entity limit.
+ */
 export interface HistoryEntity {
   partitionKey: string;
   rowKey: 'history';
-  Payload: string;
+  /** Legacy single-property form, still read for older rows. */
+  Payload?: string;
+  Chunks?: number;
   ServerUpdatedAt: string;
+  [chunk: string]: unknown;
+}
+
+const CHUNK = 30_000;          // comfortably under the 64KB property ceiling
+const MAX_TOTAL = 900_000;     // stay clear of the 1MB entity ceiling
+
+export function splitPayload(json: string): Record<string, unknown> {
+  if (json.length > MAX_TOTAL) {
+    throw new Error(`history_too_large:${json.length}`);
+  }
+  const parts: Record<string, unknown> = { Chunks: Math.ceil(json.length / CHUNK) };
+  for (let i = 0, n = 0; i < json.length; i += CHUNK, n++) {
+    parts[`P${n}`] = json.slice(i, i + CHUNK);
+  }
+  return parts;
+}
+
+export function joinPayload(e: HistoryEntity | null): string {
+  if (!e) return '';
+  if (typeof e.Chunks === 'number') {
+    let out = '';
+    for (let i = 0; i < e.Chunks; i++) out += (e[`P${i}`] as string) ?? '';
+    return out;
+  }
+  return e.Payload ?? '';                       // legacy row
 }
 
 export async function getHistory(userId: string) {
@@ -104,13 +137,15 @@ export async function mergeHistory(
   userId: string, incoming: Record<string, { date: string }>, serverTime: string,
 ) {
   const existing = await getHistory(userId);
-  const merged: Record<string, { date: string }> = existing ? JSON.parse(existing.Payload) : {};
+  const raw = joinPayload(existing);
+  const merged: Record<string, { date: string }> = raw ? JSON.parse(raw) : {};
   for (const [exId, entry] of Object.entries(incoming ?? {})) {
     if (!merged[exId] || entry.date > merged[exId].date) merged[exId] = entry;
   }
-  await table(HISTORY_TABLE).upsertEntity<HistoryEntity>({
+  await table(HISTORY_TABLE).upsertEntity({
     partitionKey: userId, rowKey: 'history',
-    Payload: JSON.stringify(merged), ServerUpdatedAt: serverTime,
-  }, 'Replace');
+    ServerUpdatedAt: serverTime,
+    ...splitPayload(JSON.stringify(merged)),
+  } as HistoryEntity, 'Replace');
   return merged;
 }

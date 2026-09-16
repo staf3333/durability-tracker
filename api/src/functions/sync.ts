@@ -1,7 +1,7 @@
 import { app, type HttpRequest, type HttpResponseInit } from '@azure/functions';
 import { getPrincipal, json, unauthorized } from '../lib/auth';
 import {
-  ensureTables, listSessionsSince, upsertSession, mergeHistory, getHistory,
+  ensureTables, listSessionsSince, upsertSession, mergeHistory, getHistory, joinPayload,
 } from '../lib/store';
 
 interface PushBody {
@@ -29,7 +29,7 @@ export async function pull(req: HttpRequest): Promise<HttpResponseInit> {
   return json(200, {
     serverTime: new Date().toISOString(),
     sessions,
-    history: historyRow ? JSON.parse(historyRow.Payload) : {},
+    history: (() => { const raw = joinPayload(historyRow); return raw ? JSON.parse(raw) : {}; })(),
     deleted,
   });
 }
@@ -60,7 +60,13 @@ export async function push(req: HttpRequest): Promise<HttpResponseInit> {
     else conflicts[date] = JSON.parse(res.stored.Payload);
   }
 
-  if (body.history) await mergeHistory(p.userId, body.history, serverTime);
+  try {
+    if (body.history) await mergeHistory(p.userId, body.history, serverTime);
+  } catch (err) {
+    // Sessions already landed; report the history failure without losing them.
+    const msg = err instanceof Error ? err.message : 'history_failed';
+    return json(200, { serverTime, accepted, conflicts, historyError: msg });
+  }
 
   return json(200, { serverTime, accepted, conflicts });
 }

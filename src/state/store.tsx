@@ -54,12 +54,16 @@ function blankSets(n: number): SetEntry[] {
  * it, and queues it for push. Every session mutation funnels through here, so
  * nothing can be edited without also being marked dirty.
  */
-function withSession(store: Store, date: string, day: string, now: string): [Store, Session] {
+function withSession(
+  store: Store, date: string, day: string, now: string, isWork = false,
+): [Store, Session] {
   const existing = store.sessions[date];
   const session: Session = existing
     ? { ...existing, exercises: { ...existing.exercises }, updatedAt: now }
-    : { day, readiness: null, exercises: {}, notes: '', updatedAt: now, startedAt: now };
-  if (!session.startedAt) session.startedAt = now;
+    : { day, readiness: null, exercises: {}, notes: '', updatedAt: now };
+  // The clock starts when work is actually logged, not when the app is opened,
+  // a day is picked, or a check-in is saved.
+  if (isWork && !session.startedAt) session.startedAt = now;
   const next: Store = {
     ...store,
     sessions: { ...store.sessions, [date]: session },
@@ -82,26 +86,26 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
       return next;
     }
     case 'setSetField': {
-      const [next, session] = withSession(store, action.date, action.day, action.now);
+      const [next, session] = withSession(store, action.date, action.day, action.now, true);
       const sets = ensureSets(session, action.exId, action.index + 1);
       while (sets.length <= action.index) sets.push({ reps: '', load: '', done: false });
       sets[action.index] = { ...sets[action.index], [action.field]: action.value };
       return next;
     }
     case 'toggleDone': {
-      const [next, session] = withSession(store, action.date, action.day, action.now);
+      const [next, session] = withSession(store, action.date, action.day, action.now, true);
       const sets = ensureSets(session, action.exId, action.index + 1);
       sets[action.index] = { ...sets[action.index], done: !sets[action.index].done };
       return next;
     }
     case 'completeTimedSet': {
-      const [next, session] = withSession(store, action.date, action.day, action.now);
+      const [next, session] = withSession(store, action.date, action.day, action.now, true);
       const sets = ensureSets(session, action.exId, action.index + 1);
       sets[action.index] = { ...sets[action.index], reps: action.value, done: true };
       return next;
     }
     case 'addSet': {
-      const [next, session] = withSession(store, action.date, action.day, action.now);
+      const [next, session] = withSession(store, action.date, action.day, action.now, true);
       const sets = ensureSets(session, action.exId, action.defaults);
       // Load usually repeats across sets; reps are the thing that varies, so
       // carry the weight forward and leave reps to be entered.

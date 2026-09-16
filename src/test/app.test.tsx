@@ -1325,3 +1325,41 @@ describe('upper body sessions', () => {
     expect(row.querySelector('.olast')!.textContent).toMatch(/85×5, 90×6/);
   });
 });
+
+/* ---------- the session clock ---------- */
+describe('session clock', () => {
+  it('does not start merely from opening a day', () => {
+    const s = reducer(emptyStore, { type: 'setDay', date: 'd', day: 'mon', now: NOW });
+    expect(s.sessions.d.startedAt).toBeUndefined();
+  });
+
+  it('does not start from a check-in', () => {
+    const s = reducer(emptyStore, {
+      type: 'saveReadiness', date: 'd', day: 'mon', now: NOW,
+      readiness: { ktwR: 8, ktwL: 15, anklePain: 6, tendonPain: 4, amStiff: 10,
+                   swelling: 'no', notes: '', status: 'yellow' },
+    });
+    expect(s.sessions.d.startedAt).toBeUndefined();
+  });
+
+  it('starts when a set is actually logged', () => {
+    const s = reducer(emptyStore, {
+      type: 'setSetField', date: 'd', day: 'mon', exId: 'bench',
+      index: 0, field: 'reps', value: '5', now: NOW,
+    });
+    expect(s.sessions.d.startedAt).toBe(NOW);
+  });
+
+  it('starts when a set is ticked', () => {
+    const s = reducer(emptyStore, {
+      type: 'toggleDone', date: 'd', day: 'mon', exId: 'bench', index: 0, now: NOW,
+    });
+    expect(s.sessions.d.startedAt).toBe(NOW);
+  });
+
+  it('shows no clock in the UI until work is logged', async () => {
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'tue');
+    expect(document.querySelector('.stats')).toBeNull();
+  });
+});

@@ -139,3 +139,48 @@ describe('history merge', () => {
     expect(Object.keys(merged).sort()).toEqual(['hens', 'soleus']);
   });
 });
+
+describe('history larger than one storage property', () => {
+  const USER = 'github|chunk';
+
+  it('round-trips a payload well over the 64KB property limit', async () => {
+    const big: Record<string, any> = {};
+    for (let i = 0; i < 400; i++) {
+      big[`ex${i}`] = { date: '2026-04-17', source: 'PJF', sets: Array.from({ length: 6 },
+        () => ({ reps: '12', load: '135', done: true })) };
+    }
+    const raw = JSON.stringify(big);
+    expect(raw.length).toBeGreaterThan(65536);
+
+    const merged = await mergeHistory(USER, big, 'S1');
+    expect(Object.keys(merged)).toHaveLength(400);
+
+    const stored = rows.get(`${USER}/history`);
+    expect(stored.Chunks).toBeGreaterThan(1);
+    for (let i = 0; i < stored.Chunks; i++) {
+      expect(String(stored[`P${i}`]).length).toBeLessThanOrEqual(65536);
+    }
+
+    const back = await mergeHistory(USER, {}, 'S2');
+    expect(Object.keys(back)).toHaveLength(400);
+  });
+
+  it('still reads a legacy single-property row', async () => {
+    rows.set(`${USER}/history`, {
+      partitionKey: USER, rowKey: 'history', ServerUpdatedAt: 'S0',
+      Payload: JSON.stringify({ hens: { date: '2026-04-17' } }),
+    });
+    const merged = await mergeHistory(USER, { soleus: { date: '2025-02-01' } } as any, 'S1');
+    expect(Object.keys(merged).sort()).toEqual(['hens', 'soleus']);
+  });
+
+  it('refuses a payload that would exceed the entity limit', async () => {
+    const huge: Record<string, any> = {};
+    for (let i = 0; i < 4000; i++) {
+      huge[`ex${i}`] = { date: '2026-04-17', source: 'PJF',
+        sets: Array.from({ length: 8 }, () => ({ reps: '12', load: '135', done: true })) };
+    }
+    expect(JSON.stringify(huge).length).toBeGreaterThan(900_000);
+    await expect(mergeHistory(USER, huge, 'S1')).rejects.toThrow(/history_too_large/);
+  });
+});
