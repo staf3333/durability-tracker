@@ -442,3 +442,6 @@ label.f .hint{display:block;font-style:normal;font-size:.74rem;color:var(--muted
 .rdate{flex:0 0 96px;color:var(--muted);font-variant-numeric:tabular-nums}
 .rname{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rsets{flex:0 0 auto;color:var(--muted);font-variant-numeric:tabular-nums}
+
+.buildid{text-align:center;font-size:.62rem;color:#c4c4c4;padding:22px 0 10px;
+  letter-spacing:.4px;font-variant-numeric:tabular-nums}

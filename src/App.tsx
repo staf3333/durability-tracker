@@ -63,6 +63,7 @@ function Shell() {
       {tab === 'export' && <ExportView />}
       {tab === 'rules' && <RulesView />}
       <RestBar />
+      <div className="buildid">build {__BUILD_ID__}</div>
     </div>
   );
 }
