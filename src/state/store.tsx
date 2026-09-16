@@ -30,6 +30,9 @@ export type Action =
   | { type: 'setConflict'; date: string; mine: Session | null }
   | { type: 'setSyncError'; message: string | null }
   | { type: 'setExercisePref'; exId: string; pref: ExercisePref }
+  | { type: 'setExerciseNote'; date: string; day: string; exId: string; note: string }
+  | { type: 'completeSession'; date: string; day: string }
+  | { type: 'reopenSession'; date: string; day: string }
   | { type: 'wipe' };
 
 export const emptySync: SyncState = { userId: null, lastSyncedAt: null, pending: {}, lastError: null };
@@ -55,7 +58,8 @@ function withSession(store: Store, date: string, day: string, now: string): [Sto
   const existing = store.sessions[date];
   const session: Session = existing
     ? { ...existing, exercises: { ...existing.exercises }, updatedAt: now }
-    : { day, readiness: null, exercises: {}, notes: '', updatedAt: now };
+    : { day, readiness: null, exercises: {}, notes: '', updatedAt: now, startedAt: now };
+  if (!session.startedAt) session.startedAt = now;
   const next: Store = {
     ...store,
     sessions: { ...store.sessions, [date]: session },
@@ -98,7 +102,11 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
     }
     case 'addSet': {
       const [next, session] = withSession(store, action.date, action.day, action.now);
-      ensureSets(session, action.exId, action.defaults).push({ reps: '', load: '', done: false });
+      const sets = ensureSets(session, action.exId, action.defaults);
+      // Load usually repeats across sets; reps are the thing that varies, so
+      // carry the weight forward and leave reps to be entered.
+      const prevLoad = [...sets].reverse().find((s) => s.load)?.load ?? '';
+      sets.push({ reps: '', load: prevLoad, done: false });
       return next;
     }
     case 'removeSet': {
@@ -127,6 +135,24 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
       session.readiness = action.readiness;
       return next;
     }
+    case 'setExerciseNote': {
+      const [next, session] = withSession(store, action.date, action.day, action.now);
+      const notes = { ...(session.exerciseNotes ?? {}) };
+      if (action.note) notes[action.exId] = action.note;
+      else delete notes[action.exId];
+      session.exerciseNotes = notes;
+      return next;
+    }
+    case 'completeSession': {
+      const [next, session] = withSession(store, action.date, action.day, action.now);
+      session.completedAt = action.now;
+      return next;
+    }
+    case 'reopenSession': {
+      const [next, session] = withSession(store, action.date, action.day, action.now);
+      delete session.completedAt;
+      return next;
+    }
     case 'setNotes': {
       const [next, session] = withSession(store, action.date, action.day, action.now);
       session.notes = action.notes;
@@ -141,7 +167,9 @@ export function reducer(store: Store, action: Stamped<Action>): Store {
       const prefs = { ...(store.prefs ?? {}) };
       const merged = { ...(prefs[action.exId] ?? {}), ...action.pref };
       // Drop keys that match the template default so prefs stay minimal.
-      if (merged.load === undefined && merged.seconds === undefined) delete prefs[action.exId];
+      const empty = merged.load === undefined && merged.seconds === undefined
+        && merged.rest === undefined;
+      if (empty) delete prefs[action.exId];
       else prefs[action.exId] = merged;
       return { ...store, prefs };
     }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Block, Status } from '../types';
 import { TEMPLATES, DAY_ORDER } from '../data/templates';
 import { useStore } from '../state/store';
@@ -7,8 +7,10 @@ import { BlockView } from './BlockView';
 import { SessionOverview } from './SessionOverview';
 import { ExerciseDetail } from './ExerciseDetail';
 import { flatten, nextIndex, prevIndex } from '../lib/session';
-import { RestBar, useCountdown } from './Timers';
-import { fmtSec } from '../lib/plan';
+import { useCountdown } from './Timers';
+import { useRest } from '../state/RestTimer';
+import { effective } from '../lib/plan';
+
 
 const DAY_LABELS: Record<string, string> = {
   mon: 'Mon · Lower A', tue: 'Tue · Shooting', wed: 'Wed · Lower B',
@@ -30,7 +32,7 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const rest = useCountdown();
+  const rest = useRest();
   const setTimer = useCountdown((key, total) => {
     const [exId, idx] = key.split(':');
     dispatch({ type: 'completeTimedSet', date, day, exId, index: +idx, value: fmt(total) });
@@ -46,8 +48,11 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
     onToggle: (exId: string, index: number) => {
       const wasDone = !!session?.exercises[exId]?.[index]?.done;
       dispatch({ type: 'toggleDone', date, day, exId, index });
-      const ex = flat.find((f) => f.ex.id === exId)?.ex;
-      if (ex?.rest && !wasDone) rest.toggle('rest', ex.rest);
+      const base = flat.find((f) => f.ex.id === exId)?.ex;
+      const ex = base ? effective(base, store) : undefined;
+      if (ex?.rest && !wasDone) {
+        rest.start(`${exId}:${index}`, `${ex.name} · set ${index + 1}`, ex.rest);
+      }
     },
     onTimer: (exId: string, index: number, seconds: number) =>
       setTimer.toggle(`${exId}:${index}`, seconds),
@@ -55,9 +60,12 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
       dispatch({ type: 'addSet', date, day, exId, defaults }),
     onRemoveSet: (exId: string, index: number) =>
       dispatch({ type: 'removeSet', date, day, exId, index }),
-    onRest: (sec: number) => rest.toggle('rest', sec),
+    onRest: (sec: number, exId?: string, index?: number) =>
+      rest.start(`${exId ?? 'manual'}:${index ?? 0}`, exId ? `${exId} · rest` : 'Rest', sec),
     onPref: (exId: string, pref: import('../types').ExercisePref) =>
       dispatch({ type: 'setExercisePref', exId, pref }),
+    onNote: (exId: string, note: string) =>
+      dispatch({ type: 'setExerciseNote', date, day, exId, note }),
   };
 
   const defaultsFor = useMemo(() => {
@@ -81,14 +89,40 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
   const status = session?.readiness?.status;
   const volume = sessionVolume(session);
   const done = countDone(session);
+  const locked = !!session?.completedAt;
+
+  // Session clock: runs from the first logged activity until it is locked in.
+  const [nowTick, setNowTick] = useState(Date.now());
+  useEffect(() => {
+    if (!session?.startedAt || locked) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [session?.startedAt, locked]);
+
+  const elapsed = session?.startedAt
+    ? Math.max(0, Math.round(
+        ((locked && session.completedAt ? Date.parse(session.completedAt) : nowTick)
+          - Date.parse(session.startedAt)) / 1000))
+    : 0;
+  const clock = elapsed >= 3600
+    ? `${Math.floor(elapsed / 3600)}h ${String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0')}m`
+    : `${Math.floor(elapsed / 60)}m ${String(elapsed % 60).padStart(2, '0')}s`;
 
   return (
     <section>
-      {(done > 0 || volume > 0) && (
-        <div className="stats">
+      {(done > 0 || volume > 0 || session?.startedAt) && (
+        <div className={`stats${locked ? ' locked' : ''}`}>
+          <div><b>{clock}</b><span>{locked ? 'total' : 'elapsed'}</span></div>
           <div><b>{done}</b><span>sets done</span></div>
           <div><b>{volume ? volume.toLocaleString() : '—'}</b><span>lbs moved</span></div>
-          <div><b>{rest.timer ? fmtSec(rest.timer.remain) : '—'}</b><span>rest</span></div>
+        </div>
+      )}
+
+      {locked && (
+        <div className="note locknote">
+          <b>Session locked in.</b> Finished {new Date(session!.completedAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.
+          <button className="mini" style={{ marginLeft: 10 }}
+            onClick={() => dispatch({ type: 'reopenSession', date, day })}>Edit anyway</button>
         </div>
       )}
       <label className="f">
@@ -117,6 +151,7 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
               key={i}
               block={block} session={session} store={store} date={date} timer={setTimer.timer}
               {...handlers}
+              onRest={(sec: number) => rest.start('manual:0', 'Rest', sec)}
               onAddRound={(b: Block) => dispatch({
                 type: 'addRound', date, day,
                 exIds: b.exercises.map((x) => x.id), defaults: defaultsFor,
@@ -133,6 +168,21 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
               onOpen={setOpenIndex}
             />
           )}
+
+          {done > 0 && !locked && (
+            <button className="btn complete" onClick={() => {
+              if (window.confirm(
+                `Lock in this session?\n\n${done} sets · ${clock}`
+                + `${volume ? ` · ${volume.toLocaleString()} lbs` : ''}`
+                + '\n\nYou can still edit it afterwards.')) {
+                dispatch({ type: 'completeSession', date, day });
+                setToast('Session locked in');
+                setTimeout(() => setToast(''), 2200);
+              }
+            }}>
+              Complete workout · {clock}
+            </button>
+          )}
         </>
       ) : (
         <ExerciseDetail
@@ -141,6 +191,7 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
           prev={(() => { const n = prevIndex(openIndex); return n == null ? null : flat[n]; })()}
           session={session} store={store} date={date} timer={setTimer.timer}
           {...handlers}
+          locked={locked}
           onGo={setOpenIndex}
           onClose={() => setOpenIndex(null)}
         />
@@ -154,7 +205,6 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
         onChange={(e) => dispatch({ type: 'setNotes', date, day, notes: e.target.value })}
       />
 
-      <RestBar timer={rest.timer} onStop={rest.stop} onExtend={rest.extend} />
       <div className={`toast${toast ? ' on' : ''}`}>{toast}</div>
     </section>
   );

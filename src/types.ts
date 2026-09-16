@@ -64,6 +64,12 @@ export interface Session {
   notes: string;
   /** Device clock at the time of the edit. Decides who wins a sync conflict. */
   updatedAt: string;
+  /** First logged activity, used for the session clock. */
+  startedAt?: string;
+  /** Set when the session is locked in. Stops the clock and freezes inputs. */
+  completedAt?: string;
+  /** exerciseId -> note written during the session. */
+  exerciseNotes?: Record<string, string>;
   /** Soft-delete tombstone, so a delete propagates instead of being resurrected. */
   deletedAt?: string;
 }
@@ -95,6 +101,8 @@ export interface ExercisePref {
   load?: boolean;
   /** Work-timer duration in seconds; null removes a timer the template defines. */
   seconds?: number | null;
+  /** Rest duration override in seconds; null removes rest for this exercise. */
+  rest?: number | null;
 }
 
 export interface Store {

@@ -163,5 +163,9 @@ export function effective(ex: Exercise, store: Store): Exercise {
     if (pref.seconds === null) delete out.seconds;
     else out.seconds = pref.seconds;
   }
+  if (pref.rest !== undefined) {
+    if (pref.rest === null) delete out.rest;
+    else out.rest = pref.rest;
+  }
   return out;
 }

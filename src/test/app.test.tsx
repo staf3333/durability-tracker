@@ -1084,3 +1084,179 @@ describe('check-in measurement conditions', () => {
     expect(document.body.textContent).toMatch(/pinches at end range rather than aching/i);
   });
 });
+
+/* ---------- feedback from the first real session ---------- */
+describe('carrying load to a new set', () => {
+  it('copies the previous load but leaves reps blank', () => {
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: 'd', day: 'mon', exId: 'hens',
+      index: 0, field: 'load', value: '75', now: NOW,
+    });
+    s = reducer(s, {
+      type: 'setSetField', date: 'd', day: 'mon', exId: 'hens',
+      index: 0, field: 'reps', value: '6', now: NOW,
+    });
+    s = reducer(s, { type: 'addSet', date: 'd', day: 'mon', exId: 'hens', defaults: 4, now: NOW });
+    const sets = s.sessions.d.exercises.hens;
+    expect(sets[sets.length - 1]).toEqual({ reps: '', load: '75', done: false });
+  });
+
+  it('takes the most recent load when earlier sets are blank', () => {
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: 'd', day: 'mon', exId: 'hens',
+      index: 1, field: 'load', value: '80', now: NOW,
+    });
+    s = reducer(s, { type: 'addSet', date: 'd', day: 'mon', exId: 'hens', defaults: 4, now: NOW });
+    const sets = s.sessions.d.exercises.hens;
+    expect(sets[sets.length - 1].load).toBe('80');
+  });
+
+  it('leaves load empty when nothing has been entered', () => {
+    const s = reducer(emptyStore, {
+      type: 'addSet', date: 'd', day: 'mon', exId: 'razor', defaults: 2, now: NOW,
+    });
+    expect(s.sessions.d.exercises.razor.at(-1)!.load).toBe('');
+  });
+});
+
+describe('per-exercise notes', () => {
+  it('stores a note against the exercise, not the session', () => {
+    const s = reducer(emptyStore, {
+      type: 'setExerciseNote', date: 'd', day: 'mon', exId: 'razor',
+      note: 'knees felt like they were about to explode', now: NOW,
+    });
+    expect(s.sessions.d.exerciseNotes!.razor).toMatch(/explode/);
+    expect(s.sessions.d.notes).toBe('');
+  });
+
+  it('clears the entry when emptied rather than storing blanks', () => {
+    let s = reducer(emptyStore, {
+      type: 'setExerciseNote', date: 'd', day: 'mon', exId: 'razor', note: 'x', now: NOW,
+    });
+    s = reducer(s, {
+      type: 'setExerciseNote', date: 'd', day: 'mon', exId: 'razor', note: '', now: NOW,
+    });
+    expect(s.sessions.d.exerciseNotes).toEqual({});
+  });
+
+  it('is editable from the detail view', async () => {
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Razor Curl'))!);
+    await userEvent.type(screen.getByLabelText(/Notes for Razor Curl/i), 'low ROM');
+    const store = read();
+    expect(store.sessions[Object.keys(store.sessions)[0]].exerciseNotes!.razor).toBe('low ROM');
+  });
+});
+
+describe('session lifecycle', () => {
+  it('stamps startedAt on the first activity and keeps it', () => {
+    const later = '2026-09-15T10:30:00.000Z';
+    let s = reducer(emptyStore, {
+      type: 'setSetField', date: 'd', day: 'mon', exId: 'hens',
+      index: 0, field: 'reps', value: '6', now: NOW,
+    });
+    expect(s.sessions.d.startedAt).toBe(NOW);
+    s = reducer(s, { type: 'toggleDone', date: 'd', day: 'mon', exId: 'hens', index: 0, now: later });
+    expect(s.sessions.d.startedAt).toBe(NOW);
+    expect(s.sessions.d.updatedAt).toBe(later);
+  });
+
+  it('locks and reopens a session', () => {
+    let s = reducer(emptyStore, { type: 'completeSession', date: 'd', day: 'mon', now: NOW });
+    expect(s.sessions.d.completedAt).toBe(NOW);
+    s = reducer(s, { type: 'reopenSession', date: 'd', day: 'mon', now: NOW });
+    expect(s.sessions.d.completedAt).toBeUndefined();
+  });
+
+  it('offers Complete once work is logged, and locks on confirm', async () => {
+    render(<App />);
+    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    expect(document.querySelector('.btn.complete')).toBeNull();
+
+    await userEvent.click([...document.querySelectorAll('.orow')]
+      .find((r) => r.textContent?.includes('Heels Elevated Narrow Squat'))!);
+    await userEvent.click(document.querySelector('.dset .tick')!);
+    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+
+    await userEvent.click(document.querySelector('.btn.complete')!);
+    const store = read();
+    expect(store.sessions[Object.keys(store.sessions)[0]].completedAt).toBeTruthy();
+    expect(document.querySelector('.locknote')!.textContent).toMatch(/Session locked in/i);
+  });
+});
+
+describe('rest override', () => {
+  it('changes the rest duration for one exercise', () => {
+    const s = reducer(emptyStore, {
+      type: 'setExercisePref', exId: 'hens', pref: { rest: 180 }, now: NOW,
+    });
+    expect(s.prefs!.hens.rest).toBe(180);
+  });
+
+  it('turns rest off with null', () => {
+    const s = reducer(emptyStore, {
+      type: 'setExercisePref', exId: 'hens', pref: { rest: null }, now: NOW,
+    });
+    expect(s.prefs!.hens.rest).toBeNull();
+  });
+});
+
+describe('dashboard', () => {
+  const seed = (sessions: Record<string, unknown>) =>
+    localStorage.setItem('dtrack.v1', JSON.stringify({
+      version: 4, sync: emptySync, history: {}, prefs: {}, sessions,
+    }));
+
+  it('counts logged sessions and check-ins', async () => {
+    seed({
+      '2026-09-14': { day: 'mon', readiness: null, notes: '', updatedAt: NOW,
+                      exercises: { hens: [{ reps: '6', load: '75', done: true }] } },
+      '2026-09-15': { day: 'wed', notes: '', updatedAt: NOW, exercises: {},
+                      readiness: { ktwR: 8, ktwL: 15, anklePain: 6, tendonPain: 4,
+                                   amStiff: 10, swelling: 'no', notes: '', status: 'yellow' } },
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    expect(screen.getByText(/1 sessions logged · 1 check-ins/)).toBeInTheDocument();
+  });
+
+  it('marks trained days on the calendar and flags readiness', async () => {
+    seed({
+      '2026-09-14': { day: 'mon', notes: '', updatedAt: NOW,
+                      exercises: { hens: [{ reps: '6', load: '75', done: true }] },
+                      readiness: { ktwR: 8, ktwL: 15, anklePain: 6, tendonPain: 4,
+                                   amStiff: 10, swelling: 'no', notes: '', status: 'yellow' } },
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    const day = [...document.querySelectorAll('.cday')]
+      .find((c) => c.getAttribute('aria-label')?.includes('Sep 14'))!;
+    expect(day.className).toMatch(/worked/);
+    expect(day.className).toMatch(/s-yellow/);
+  });
+
+  it('plots a trend once there are two readings', async () => {
+    seed({
+      '2026-09-14': { day: 'mon', notes: '', updatedAt: NOW, exercises: {},
+                      readiness: { ktwR: 7, ktwL: 15, anklePain: 6, tendonPain: 4,
+                                   amStiff: 20, swelling: 'no', notes: '', status: 'yellow' } },
+      '2026-09-15': { day: 'wed', notes: '', updatedAt: NOW, exercises: {},
+                      readiness: { ktwR: 9, ktwL: 15, anklePain: 3, tendonPain: 2,
+                                   amStiff: 5, swelling: 'no', notes: '', status: 'green' } },
+    });
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    const ankle = [...document.querySelectorAll('.trow')]
+      .find((r) => r.textContent?.includes('Ankle pain'))!;
+    expect(ankle.querySelector('svg')).toBeInTheDocument();
+    expect(ankle.querySelector('.sparkv')!.textContent).toBe('3');
+  });
+
+  it('says so when there is nothing to show', async () => {
+    render(<App />);
+    await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
+    expect(screen.getByText(/Nothing logged yet/i)).toBeInTheDocument();
+  });
+});

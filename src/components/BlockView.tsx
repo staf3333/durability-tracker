@@ -18,7 +18,7 @@ interface Props {
   onRemoveSet: (exId: string, i: number) => void;
   onAddRound: (block: Block) => void;
   onRemoveRound: (block: Block) => void;
-  onRest: (seconds: number) => void;
+  onRest: (seconds: number, exId?: string, index?: number) => void;
 }
 
 export function BlockView(p: Props) {

@@ -19,8 +19,10 @@ interface Props {
   onTimer: (exId: string, i: number, seconds: number) => void;
   onAddSet: (exId: string, defaults: number) => void;
   onRemoveSet: (exId: string, i: number) => void;
-  onRest: (seconds: number) => void;
+  onRest: (seconds: number, exId?: string, index?: number) => void;
   onPref: (exId: string, pref: ExercisePref) => void;
+  onNote: (exId: string, note: string) => void;
+  locked?: boolean;
   onGo: (index: number) => void;
   onClose: () => void;
 }
@@ -106,6 +108,19 @@ export function ExerciseDetail(p: Props) {
             </label>
           )}
 
+          <label className="prow num">
+            <span>Rest</span>
+            <input
+              type="number" min="0" step="15" value={ex.rest ?? 0}
+              onChange={(e) => {
+                const v = Math.max(0, +e.target.value || 0);
+                p.onPref(ex.id, { rest: v === 0 ? null : v });
+              }}
+              aria-label="Rest duration in seconds"
+            />
+            <small>seconds{ex.rest ? ` · ${fmtSec(ex.rest)}` : ' · off'}</small>
+          </label>
+
           <div className="ptitle">{grouped ? 'Rounds' : 'Sets'}</div>
           <div className="pbtns">
             <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ add {unit}</button>
@@ -152,11 +167,24 @@ export function ExerciseDetail(p: Props) {
         </div>
       ))}
 
+      <label className="exnote">
+        <span>Notes for this exercise</span>
+        <textarea
+          value={p.session?.exerciseNotes?.[ex.id] ?? ''}
+          onChange={(e) => p.onNote(ex.id, e.target.value)}
+          placeholder="How it felt, ROM, what to change next time…"
+          aria-label={`Notes for ${ex.name}`}
+          disabled={p.locked}
+        />
+      </label>
+
       <div className="dbtns">
         <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ {unit}</button>
-        {ex.rest && (
-          <button className="mini" onClick={() => p.onRest(ex.rest!)}>rest {fmtSec(ex.rest)}</button>
-        )}
+        {ex.rest ? (
+          <button className="mini" onClick={() => p.onRest(ex.rest!, ex.id, 0)}>
+            rest {fmtSec(ex.rest)}
+          </button>
+        ) : null}
       </div>
 
       <div className="upnext">

@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { StoreProvider, useStore } from './state/store';
+import { RestProvider, RestBar } from './state/RestTimer';
 import { TodayView } from './components/TodayView';
 import { CheckInView, ExportView, HistoryView, RulesView } from './components/Views';
+import { DashboardView } from './components/DashboardView';
 import { defaultDay, fmtDate, todayKey } from './lib/plan';
 import { useSync } from './state/useSync';
 import { ConflictBanner, SignedOutNote, SyncChip } from './components/SyncUI';
 
 const TABS = [
-  ['today', 'Today'], ['check', 'Check-in'], ['history', 'History'],
-  ['export', 'Export'], ['rules', 'Rules'],
+  ['today', 'Today'], ['check', 'Check-in'], ['dash', 'Dashboard'],
+  ['history', 'History'], ['export', 'Export'], ['rules', 'Rules'],
 ] as const;
 type Tab = (typeof TABS)[number][0];
 
@@ -56,13 +58,15 @@ function Shell() {
 
       {tab === 'today' && <TodayView date={date} day={day} setDay={setDay} />}
       {tab === 'check' && <CheckInView date={date} day={day} />}
+      {tab === 'dash' && <DashboardView />}
       {tab === 'history' && <HistoryView />}
       {tab === 'export' && <ExportView />}
       {tab === 'rules' && <RulesView />}
+      <RestBar />
     </div>
   );
 }
 
 export default function App() {
-  return <StoreProvider><Shell /></StoreProvider>;
+  return <StoreProvider><RestProvider><Shell /></RestProvider></StoreProvider>;
 }
