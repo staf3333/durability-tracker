@@ -53,8 +53,8 @@ jobs:
           action: upload
           app_location: dist
           api_location: api
+          config_file_location: .
           skip_app_build: true
-          skip_api_build: false
 
       - name: Smoke test staging origin
         env:
