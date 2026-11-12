@@ -23,6 +23,7 @@ jobs:
           npm ci
           npm test
           npm run build
+          cp staticwebapp.config.json dist/staticwebapp.config.json
           npx playwright install --with-deps chromium
           npx playwright test
 
@@ -40,5 +41,4 @@ jobs:
           action: upload
           app_location: dist          # pre-built by the step above
           api_location: api
-          config_file_location: .
           skip_app_build: true
