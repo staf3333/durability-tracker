@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '../state/store';
 import { TEMPLATES } from '../data/templates';
-import { countDone, fmtDate, sessionVolume, todayKey } from '../lib/plan';
+import { countDone, fmtDate, sessionVolumes, todayKey } from '../lib/plan';
 import type { Session } from '../types';
+import { sessionDate, sessionsForDate, workoutName } from '../data/workouts';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -52,38 +53,54 @@ export function DashboardView() {
   const { store } = useStore();
   const today = todayKey();
   const [cursor, setCursor] = useState(() => {
-    const [y, m] = today.split('-').map(Number);
+    const latest = Object.entries(store.sessions)
+      .filter(([, session]) => !session.deletedAt)
+      .map(([id, session]) => sessionDate(id, session))
+      .sort()
+      .at(-1) ?? today;
+    const [y, m] = latest.split('-').map(Number);
     return { y, m: m - 1 };
   });
 
   const stats = useMemo(() => {
-    const dates = Object.keys(store.sessions).sort();
-    const trained = dates.filter((d) => hasWork(store.sessions[d]));
+    const entries = Object.entries(store.sessions)
+      .filter(([, session]) => !session.deletedAt)
+      .sort((a, b) => {
+        const byDate = sessionDate(a[0], a[1]).localeCompare(sessionDate(b[0], b[1]));
+        return byDate || a[1].updatedAt.localeCompare(b[1].updatedAt);
+      });
+    const trained = entries.filter(([, session]) => hasWork(session));
 
     const since = (days: number) => {
       const c = new Date();
       c.setDate(c.getDate() - days);
-      return trained.filter((d) => {
-        const [y, m, dd] = d.split('-').map(Number);
+      return trained.filter(([id, session]) => {
+        const [y, m, dd] = sessionDate(id, session).split('-').map(Number);
         return new Date(y, m - 1, dd) >= c;
       });
     };
 
     const readings = (pick: (s: Session) => number | null | undefined) =>
-      dates
-        .map((d) => ({ date: d, v: pick(store.sessions[d]) }))
+      entries
+        .map(([id, session]) => ({ date: sessionDate(id, session), v: pick(session) }))
         .filter((p): p is { date: string; v: number } => typeof p.v === 'number')
         .slice(-14);
 
-    const volume = trained.reduce((sum, d) => sum + sessionVolume(store.sessions[d]), 0);
+    const volume = trained.reduce((sum, [, session]) => {
+      const current = sessionVolumes(session);
+      return { lb: sum.lb + current.lb, kg: sum.kg + current.kg };
+    }, { lb: 0, kg: 0 });
 
     // Consecutive days back from today that have either a check-in or logged work.
     let streak = 0;
     const cur = new Date();
     for (;;) {
       const k = key(cur.getFullYear(), cur.getMonth(), cur.getDate());
-      const s = store.sessions[k];
-      if (s && (hasWork(s) || s.readiness)) { streak++; cur.setDate(cur.getDate() - 1); }
+      const sessions = sessionsForDate(store, k).map(([, session]) => session);
+      if (sessions.some((session) => hasWork(session) || session.readiness)) {
+        streak++;
+        cur.setDate(cur.getDate() - 1);
+      }
       else break;
     }
 
@@ -91,7 +108,7 @@ export function DashboardView() {
       trained, streak, volume,
       week: since(7).length,
       month: since(30).length,
-      checkIns: dates.filter((d) => store.sessions[d].readiness).length,
+      checkIns: entries.filter(([, session]) => session.readiness).length,
       ankle: readings((s) => s.readiness?.anklePain),
       tendon: readings((s) => s.readiness?.tendonPain),
       stiff: readings((s) => s.readiness?.amStiff),
@@ -112,13 +129,19 @@ export function DashboardView() {
   return (
     <section>
       <h2>Dashboard</h2>
-      <p className="sub">{stats.trained.length} sessions logged · {stats.checkIns} check-ins</p>
+      <p className="sub">{stats.trained.length} workouts logged · {stats.checkIns} check-ins</p>
 
       <div className="dashstats">
         <div><b>{stats.week}</b><span>this week</span></div>
         <div><b>{stats.month}</b><span>last 30 days</span></div>
         <div><b>{stats.streak}</b><span>day streak</span></div>
-        <div><b>{stats.volume ? Math.round(stats.volume / 1000) + 'k' : '—'}</b><span>lbs total</span></div>
+        <div>
+          <b>{[
+            stats.volume.lb ? `${Math.round(stats.volume.lb / 1000)}k lb` : '',
+            stats.volume.kg ? `${Math.round(stats.volume.kg / 1000)}k kg` : '',
+          ].filter(Boolean).join(' · ') || '—'}</b>
+          <span>total volume</span>
+        </div>
       </div>
 
       <div className="calhead">
@@ -133,18 +156,22 @@ export function DashboardView() {
         {Array.from({ length: days }, (_, i) => {
           const d = i + 1;
           const k = key(cursor.y, cursor.m, d);
-          const s = store.sessions[k];
-          const worked = hasWork(s);
-          const status = s?.readiness?.status;
+          const workouts = sessionsForDate(store, k);
+          const worked = workouts.some(([, session]) => hasWork(session));
+          const status = [...workouts].reverse()
+            .find(([, session]) => session.readiness)?.[1].readiness?.status;
+          const completed = workouts.length > 0
+            && workouts.every(([, session]) => !!session.completedAt);
+          const sets = workouts.reduce((sum, [, session]) => sum + countDone(session), 0);
           const cls = [
             'cday',
             worked ? 'worked' : '',
             status ? `s-${status}` : '',
             k === today ? 'today' : '',
-            s?.completedAt ? 'locked' : '',
+            completed ? 'locked' : '',
           ].filter(Boolean).join(' ');
-          const label = s
-            ? `${fmtDate(k)}: ${worked ? `${countDone(s)} sets` : 'check-in only'}${status ? `, ${status}` : ''}`
+          const label = workouts.length
+            ? `${fmtDate(k)}: ${worked ? `${sets} sets across ${workouts.length} workout${workouts.length === 1 ? '' : 's'}` : 'check-in only'}${status ? `, ${status}` : ''}`
             : fmtDate(k);
           return (
             <span key={k} className={cls} title={label} aria-label={label}>
@@ -183,13 +210,13 @@ export function DashboardView() {
       </div>
 
       <h3>Recent</h3>
-      {stats.trained.slice(-8).reverse().map((d) => {
-        const s = store.sessions[d];
+      {stats.trained.slice(-8).reverse().map(([id, s]) => {
+        const date = sessionDate(id, s);
         return (
-          <div key={d} className="recent">
+          <div key={id} className="recent">
             <span className={`rdot ${s.readiness?.status ?? 'none'}`} />
-            <span className="rdate">{fmtDate(d)}</span>
-            <span className="rname">{TEMPLATES[s.day]?.name.split('—')[0].trim() ?? s.day}</span>
+            <span className="rdate">{fmtDate(date)}</span>
+            <span className="rname">{workoutName(s)} · {TEMPLATES[s.day]?.name.split('—')[0].trim() ?? s.day}</span>
             <span className="rsets">{countDone(s)} sets</span>
           </div>
         );

@@ -28,8 +28,8 @@ write to storage directly; they dispatch.
 
 ```
 Store
-└── sessions: Record<dateKey, Session>
-    └── Session { day, readiness, exercises: Record<exId, SetEntry[]>, notes }
+└── sessions: Record<workoutRecordId, Session>
+    └── Session { id, date, day, workoutId, readiness, exercises, notes, timestamps }
 ```
 
 Three things follow from that shape:
@@ -50,14 +50,19 @@ actually prescribes.
 
 ## Migration
 
-`hydrate()` reads the old vanilla `v1` format (`{r, w, done}`) and converts it to
-`v2` (`{reps, load, done}`). Nothing logged before the rewrite is lost. The
-version field exists so the next format change can do the same.
+`hydrate()` reads every prior format. Schema v6 derives stable planned workouts
+from `src/data/workouts.ts`. A legacy date-keyed record keeps its original key
+for the first matching workout. If it contains exercises from multiple planned
+workouts, migration splits it deterministically by exercise membership and uses
+`YYYY-MM-DD--<workoutId>` for the additional records. Date-level readiness,
+timestamps, and whole-day notes are copied to each split record so no
+information is silently discarded; duplicated whole-day notes are the
+documented ambiguity. Missing load units are interpreted as pounds.
 
 ## Timers
 
-`useCountdown` in `src/components/Timers.tsx` is used twice — once for the
-per-set work timer, once for rest. The interval lives entirely inside one
+`useCountdown` in `src/components/Timers.tsx` drives per-set work timers, while
+`RestProvider` owns the persistent rest timer. The interval lives entirely inside one
 `useEffect`, so React tears it down on unmount or when the timer changes. The
 vanilla version needed `clearInterval` in five places and still leaked one.
 
@@ -65,14 +70,27 @@ Elapsed time is derived from a wall-clock end timestamp in a ref rather than by
 counting ticks, so the countdown stays accurate if the phone throttles timers in
 a backgrounded tab.
 
+Workout duration uses accumulated active seconds plus a 30-minute maximum gap
+from the latest work interaction. Forgetting to press Complete therefore cannot
+turn an hour workout into an all-day timer. Completing after a long idle period
+uses the capped last-activity time. Legacy incomplete workouts stop at their
+last saved edit. When one legacy whole-day record is split into multiple
+planned workouts, its shared start time is omitted because it cannot be assigned
+honestly to any one workout; completion and all logged work remain preserved.
+
+Grouped blocks only auto-start rest after the final exercise in a round is
+completed. Straight sets retain per-set automatic rest. `useWakeLock` requests a
+screen wake lock for the active workout, reacquires it after visibility changes,
+and treats unsupported or denied requests as non-fatal.
+
 ## Components
 
 Split along the axis that actually varies:
 
 | Component | Responsibility |
 |---|---|
-| `App` | Tab shell, current date and selected template |
-| `TodayView` | Owns both timers, translates UI events into dispatches |
+| `App` | Tab shell, current date and selected day plan |
+| `TodayView` | Day workout dashboard plus the active workout logger |
 | `BlockView` | Branches on `mode` — straight sets vs. rounds |
 | `SetRow` | One loggable row; identical inside cards and rounds |
 | `Views` | Check-in, history, export, rules |
@@ -91,9 +109,22 @@ orphans logged sets.
 
 ## Privacy
 
-No backend, no analytics, no accounts. Everything lives in `localStorage` on the
-device. A test asserts that no clinical vocabulary appears in shipped content,
-since this repository is public while the training plan it serves is not.
+Local-first storage keeps logging available offline. Optional GitHub
+authentication syncs to Azure Table Storage. Production and staging have
+separate Static Web Apps, connection strings, storage accounts, and tables; no
+workflow copies entities between them. There is no analytics. A test asserts
+that no clinical vocabulary appears in shipped content, since this repository
+is public while the training plan it serves is not.
+
+## Environments
+
+Production and staging are separate Azure Static Web Apps with separate Table
+Storage accounts and deployment tokens. Staging uses synthetic seed data, a
+visible red environment banner, same-origin API calls, an origin-scoped service
+worker, and a CSP that restricts network connections to the current origin.
+`src/lib/environment.ts` prevents a staging bundle from running on an unknown
+hostname. Deployment and promotion details are in
+[docs/STAGING.md](docs/STAGING.md).
 
 ## Testing
 

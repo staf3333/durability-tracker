@@ -136,7 +136,7 @@ export const TEMPLATES: Record<string, Template> = {
   thu: {
     name: "Microdose + Upper 2 (mixed)",
     sub: "WOTW moderate · 15–20 min microdose · upper after work",
-    note: "Recovery session, not a third leg day. Start the inversion and toe work light — irritated sheaths flare.",
+    note: "Recovery workout, not a third leg day. Start the inversion and toe work light — irritated sheaths flare.",
     blocks: [
       {
         title: "Microdose",
@@ -193,7 +193,7 @@ export const TEMPLATES: Record<string, Template> = {
     note: "If you play the hard noon run, that is the whole day. Friday→Saturday is the riskiest stretch of your week.",
     blocks: [
       {
-        title: "Session",
+        title: "Basketball / Shooting",
         mode: "straight",
         exercises: [
           { id: "bball", name: "Basketball", sets: 1, target: "—", note: "Log minutes + RPE + hard jump attempts" },
@@ -208,7 +208,7 @@ export const TEMPLATES: Record<string, Template> = {
     note: "This is where the real jumping stimulus lives. Upper body only if this morning left you Green.",
     blocks: [
       {
-        title: "Session",
+        title: "Basketball",
         mode: "straight",
         exercises: [
           { id: "bball", name: "Competitive basketball", sets: 1, target: "—", note: "Log minutes · RPE · hard/max jump attempts" },
@@ -243,7 +243,7 @@ export const TEMPLATES: Record<string, Template> = {
     ],
   },
   dunk: {
-    name: "Dunk Ladder Session",
+    name: "Dunk Ladder",
     sub: "Always early, never after fatigue",
     note: "Run the penultimate-step ladder (right foot) alongside the jump ladder. If pain climbs on attempt 3–4, stop and record the threshold.",
     blocks: [

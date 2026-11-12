@@ -7,3 +7,5 @@ durability-*.json
 # never commit personal training data
 durability-data/
 *.private.*
+playwright-report/
+test-results/

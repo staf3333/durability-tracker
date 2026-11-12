@@ -3,6 +3,7 @@ import { getPrincipal, json, unauthorized } from '../lib/auth';
 import {
   ensureTables, listSessionsSince, upsertSession, mergeHistory, getHistory, joinPayload,
 } from '../lib/store';
+import { validWorkoutRecordId } from '../lib/workout';
 
 interface PushBody {
   sessions?: Record<string, { updatedAt: string; deletedAt?: string }>;
@@ -52,7 +53,11 @@ export async function push(req: HttpRequest): Promise<HttpResponseInit> {
   const conflicts: Record<string, unknown> = {};
 
   for (const [date, session] of Object.entries(body.sessions ?? {})) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return json(400, { error: 'bad_date', date });
+    // Legacy workouts use the bare date. Planned workouts append a stable id
+    // while keeping the date prefix readable and Azure Table-safe.
+    if (!validWorkoutRecordId(date)) {
+      return json(400, { error: 'bad_workout_id', date });
+    }
     if (!session?.updatedAt) return json(400, { error: 'missing_updatedAt', date });
 
     const res = await upsertSession(p.userId, date, session, session.updatedAt, serverTime);

@@ -3,6 +3,7 @@ import { render, screen, within, fireEvent, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App';
 import { TEMPLATES } from '../data/templates';
+import { plannedWorkouts } from '../data/workouts';
 import { hydrate, reducer, emptyStore, emptySync } from '../state/store';
 import { buildText, nameFor } from '../lib/plan';
 import type { Store } from '../types';
@@ -27,11 +28,22 @@ const field = (scope: HTMLElement, name: string, n: number, kind: 'reps' | 'load
   within(scope).getByLabelText(new RegExp(`^${name} set ${n} ${kind}$`, 'i'));
 
 const pick = async (day: string) => {
-  await userEvent.selectOptions(screen.getByLabelText('Session'), day);
-  // The session now opens as a compact overview; these assertions exercise the
+  await userEvent.selectOptions(screen.getByLabelText('Day plan'), day);
+  await userEvent.click(document.querySelector('.workoutcard') as HTMLElement);
+  // The workout opens as a compact overview; these assertions exercise the
   // expanded layout, so open it.
   const toggle = screen.queryByText('Expand all sets');
   if (toggle) await userEvent.click(toggle);
+};
+
+const openExercise = async (day: string, name: string) => {
+  await userEvent.selectOptions(screen.getByLabelText('Day plan'), day);
+  const workout = plannedWorkouts(day).find((candidate) =>
+    candidate.blocks.some((block) =>
+      block.exercises.some((exercise) => exercise.name === name)))!;
+  await userEvent.click(screen.getByRole('button', { name: `Open ${workout.name}` }));
+  await userEvent.click([...document.querySelectorAll('.orow')]
+    .find((row) => row.textContent?.includes(name))!);
 };
 
 /* ---------- content fidelity: the plan must survive the rewrite ---------- */
@@ -96,7 +108,7 @@ describe('reducer', () => {
       sessions: { '2026-09-15': { day: 'mon', notes: 'ok', readiness: null, ex: { hens: [{ r: '6', w: '135', done: true }] } } },
     });
     const store = hydrate(v1);
-    expect(store.version).toBe(4);
+    expect(store.version).toBe(6);
     const set = store.sessions['2026-09-15'].exercises.hens[0];
     expect(set).toEqual({ reps: '6', load: '135', done: true });
   });
@@ -158,7 +170,7 @@ describe('logging', () => {
     await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'load'), '135');
     await userEvent.click(within(squat).getByLabelText(/set 1 done/i));
     const set = read().sessions[today()].exercises.hens[0];
-    expect(set).toEqual({ reps: '6', load: '135', done: true });
+    expect(set).toEqual({ reps: '6', load: '135', loadUnit: 'lb', done: true });
   });
 
   it('logs a superset round into the same exercise store', async () => {
@@ -201,7 +213,8 @@ describe('set timer', () => {
     // let the sync hook's identity check settle before fake timers are installed,
     // otherwise it resolves later and updates state outside act()
     await act(async () => { await Promise.resolve(); });
-    fireEvent.change(screen.getByLabelText('Session'), { target: { value: 'thu' } });
+    fireEvent.change(screen.getByLabelText('Day plan'), { target: { value: 'thu' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Microdose' }));
     fireEvent.click(screen.getByText('Expand all sets'));
     vi.useFakeTimers();
 
@@ -248,25 +261,15 @@ describe('check-in', () => {
   });
 });
 
-/* ---------- the data-integrity bug found in the vanilla build ---------- */
-describe('session relabelling guard', () => {
-  it('keeps the original label when the prompt is declined', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
+describe('day plan switching', () => {
+  it('never relabels a logged workout when another day plan is viewed', async () => {
     render(<App />);
     await pick('mon');
     const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
     await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'reps'), '6');
-    await pick('wed');
+    await userEvent.click(screen.getByRole('button', { name: /Back to day/i }));
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), 'wed');
     expect(read().sessions[today()].day).toBe('mon');
-  });
-
-  it('relabels when the prompt is accepted', async () => {
-    render(<App />);
-    await pick('mon');
-    const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
-    await userEvent.type(field(squat, 'Heels Elevated Narrow Squat', 1, 'reps'), '6');
-    await pick('wed');
-    expect(read().sessions[today()].day).toBe('wed');
   });
 });
 
@@ -274,7 +277,7 @@ describe('session relabelling guard', () => {
 describe('export', () => {
   it('resolves exercise names across templates and never emits a raw id', () => {
     const store: Store = {
-      version: 4,
+      version: 6,
       history: {},
       sync: emptySync,
       sessions: {
@@ -288,7 +291,7 @@ describe('export', () => {
     };
     const text = buildText(store, 9999);
     expect(text).toContain('DURABILITY LOG');
-    expect(text).toContain('Heels Elevated Narrow Squat: 135×6');
+    expect(text).toContain('Heels Elevated Narrow Squat: 135 lb × 6');
     expect(text).toContain('ankle 1/10 · tendon 2/10');
     expect(text).toContain('KTW R 11.5 / L 13 (88%)');
     expect(text).toContain('Notes: felt strong');
@@ -311,7 +314,7 @@ describe('privacy', () => {
 /* ---------- imported history feeds "last time" without inventing sessions ---------- */
 describe('imported history', () => {
   const seeded: Store = {
-    version: 4,
+    version: 6,
     sync: emptySync,
     sessions: {},
     history: {
@@ -326,7 +329,7 @@ describe('imported history', () => {
   });
 
   it('is excluded from the exported log', () => {
-    expect(buildText(seeded, 9999)).toBe('No sessions logged in this range.');
+    expect(buildText(seeded, 9999)).toBe('No workouts logged in this range.');
   });
 
   it('surfaces as a PJF-labelled last-time line', async () => {
@@ -336,7 +339,7 @@ describe('imported history', () => {
     const squat = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
     const line = squat.querySelector('.lastline')!;
     expect(line.textContent).toMatch(/PJF/);
-    expect(line.textContent).toMatch(/90×8, 90×8/);
+    expect(line.textContent).toMatch(/90 lb × 8, 90 lb × 8/);
   });
 
   it('prefills the set placeholder so the load is visible before you lift', async () => {
@@ -360,14 +363,14 @@ describe('imported history', () => {
     await pick('mon');
     const line = document.querySelector('.ex[data-ex="hens"] .lastline')!;
     expect(line.textContent).toMatch(/last/);
-    expect(line.textContent).toMatch(/75×6/);
+    expect(line.textContent).toMatch(/75 lb × 6/);
     expect(line.textContent).not.toMatch(/PJF/);
   });
 
   it('migrates a v2 store without dropping data', () => {
     const v2 = JSON.stringify({ version: 2, sessions: { d: { day: 'mon', readiness: null, notes: '', exercises: {} } } });
     const s = hydrate(v2);
-    expect(s.version).toBe(4);
+    expect(s.version).toBe(6);
     expect(s.history).toEqual({});
     expect(Object.keys(s.sessions)).toHaveLength(1);
   });
@@ -410,7 +413,7 @@ describe('steppers', () => {
 });
 
 const seededStore: Store = {
-  version: 4, sync: emptySync, sessions: {},
+  version: 6, sync: emptySync, sessions: {},
   history: { hens: { date: '2026-04-17', source: 'PJF', sets: [{ reps: '8', load: '90', done: true }] } },
 };
 
@@ -474,18 +477,18 @@ describe('schema v4', () => {
       sessions: { '2026-09-01': { day: 'mon', readiness: null, notes: '', exercises: {} } },
     });
     const s = hydrate(v3);
-    expect(s.version).toBe(4);
+    expect(s.version).toBe(6);
     expect(s.sessions['2026-09-01'].updatedAt).toBe('2026-09-01T12:00:00.000Z');
-    expect(s.sync).toEqual(emptySync);
+    expect(s.sync).toEqual({ ...emptySync, pending: { '2026-09-01': true } });
   });
 
-  it('migrates v1 vanilla data all the way to v4', () => {
+  it('migrates v1 vanilla data all the way to v6', () => {
     const v1 = JSON.stringify({
       v: 1,
       sessions: { '2026-09-01': { day: 'mon', ex: { hens: [{ r: '6', w: '135', done: true }] } } },
     });
     const s = hydrate(v1);
-    expect(s.version).toBe(4);
+    expect(s.version).toBe(6);
     expect(s.sessions['2026-09-01'].exercises.hens[0]).toEqual({ reps: '6', load: '135', done: true });
     expect(s.sessions['2026-09-01'].updatedAt).toBeTruthy();
   });
@@ -734,7 +737,7 @@ describe('field labels', () => {
     const card = document.querySelector('.ex[data-ex="hens"]') as HTMLElement;
     const caps = [...card.querySelectorAll('.setrow')[0].querySelectorAll('.cap')]
       .map((c) => c.textContent);
-    expect(caps).toEqual(['reps', 'lb']);
+    expect(caps).toEqual(['reps', 'lbkg']);
   });
 
   it('labels a timed exercise as time and hints the format', async () => {
@@ -806,7 +809,8 @@ describe('sync status', () => {
 /* ---------- overview and detail ---------- */
 describe('session overview', () => {
   const open = async (day: string) => {
-    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), day);
+    await userEvent.click(document.querySelector('.workoutcard') as HTMLElement);
   };
 
   it('opens compact by default, one row per exercise', async () => {
@@ -836,7 +840,7 @@ describe('session overview', () => {
     await userEvent.click(row());
     const ticks = document.querySelectorAll('.dset .tick');
     for (const t of ticks) await userEvent.click(t);
-    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+    await userEvent.click(screen.getByLabelText(/Back to the workout list/i));
 
     expect(row().querySelector('.omark')!.textContent).toBe('✓');
     expect(row().className).toMatch(/done/);
@@ -853,10 +857,7 @@ describe('session overview', () => {
 
 describe('exercise detail', () => {
   const open = async (day: string, name: string) => {
-    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
-    const row = [...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes(name))!;
-    await userEvent.click(row);
+    await openExercise(day, name);
   };
 
   it('shows one exercise with its cue and every set', async () => {
@@ -896,7 +897,8 @@ describe('exercise detail', () => {
 
   it('disables Up next only when nothing is left', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'sun');
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), 'sun');
+    await userEvent.click(screen.getByRole('button', { name: 'Open Optional recovery' }));
     const rows = document.querySelectorAll('.orow');
     await userEvent.click(rows[rows.length - 1]);
     expect(screen.getByLabelText(/Next exercise/i)).toBeDisabled();
@@ -906,7 +908,7 @@ describe('exercise detail', () => {
   it('returns to the overview', async () => {
     render(<App />);
     await open('mon', 'Soleus Raise');
-    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+    await userEvent.click(screen.getByLabelText(/Back to the workout list/i));
     expect(document.querySelector('.ovw')).toBeInTheDocument();
     expect(document.querySelector('.detail')).toBeNull();
   });
@@ -914,22 +916,16 @@ describe('exercise detail', () => {
 
 /* ---------- supersets cycle instead of dead-ending ---------- */
 describe('superset navigation', () => {
-  const openEx = async (day: string, name: string) => {
-    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
-    await userEvent.click([...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes(name))!);
-  };
-
   it('cycles back to the partner instead of leaving the group', async () => {
     render(<App />);
-    await openEx('mon', 'Soleus Raise');           // second member of Superset A
+    await openExercise('mon', 'Soleus Raise');           // second member of Superset A
     expect(document.querySelector('.unname')!.textContent).toMatch(/Razor Curl Progressions/);
     expect(document.querySelector('.unlabel')!.textContent).toMatch(/Next in superset/i);
   });
 
   it('walks A to B within the group', async () => {
     render(<App />);
-    await openEx('mon', 'Razor Curl Progressions');
+    await openExercise('mon', 'Razor Curl Progressions');
     expect(document.querySelector('.unname')!.textContent).toMatch(/Soleus Raise/);
     await userEvent.click(screen.getByLabelText(/Next exercise/i));
     expect(document.querySelector('.dname')!.textContent).toMatch(/Soleus Raise/);
@@ -937,7 +933,7 @@ describe('superset navigation', () => {
 
   it('leaves the group once every set in it is ticked', async () => {
     render(<App />);
-    await openEx('mon', 'Razor Curl Progressions');
+    await openExercise('mon', 'Razor Curl Progressions');
     // finish this exercise
     for (const t of document.querySelectorAll('.dset .tick')) await userEvent.click(t);
     await userEvent.click(screen.getByLabelText(/Next exercise/i));
@@ -950,7 +946,7 @@ describe('superset navigation', () => {
 
   it('a straight block still advances linearly', async () => {
     render(<App />);
-    await openEx('mon', 'Heels Elevated Narrow Squat');
+    await openExercise('mon', 'Heels Elevated Narrow Squat');
     expect(document.querySelector('.unname')!.textContent)
       .toMatch(/Single Leg Full Range Step Downs/);
   });
@@ -959,9 +955,7 @@ describe('superset navigation', () => {
 /* ---------- per-exercise settings ---------- */
 describe('exercise settings', () => {
   const openEx = async (day: string, name: string) => {
-    await userEvent.selectOptions(screen.getByLabelText('Session'), day);
-    await userEvent.click([...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes(name))!);
+    await openExercise(day, name);
     await userEvent.click(screen.getByLabelText(/Exercise settings/i));
   };
 
@@ -1025,12 +1019,10 @@ describe('exercise history panel', () => {
       },
     }));
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
-    await userEvent.click([...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes('Heels Elevated Narrow Squat'))!);
-    await userEvent.click(screen.getByLabelText(/Exercise history/i));
+    await openExercise('mon', 'Heels Elevated Narrow Squat');
+    await userEvent.click(screen.getByRole('button', { name: /Previous workouts/i }));
 
-    const panel = document.querySelector('.panel')!;
+    const panel = document.querySelector('.historydrawer')!;
     expect(panel.textContent).toMatch(/115 lb/);
     expect(panel.textContent).toMatch(/felt it for sure/);
     expect(panel.querySelectorAll('.hrow')).toHaveLength(2);
@@ -1038,11 +1030,9 @@ describe('exercise history panel', () => {
 
   it('says so when there is nothing recorded', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
-    await userEvent.click([...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes('Razor Curl'))!);
-    await userEvent.click(screen.getByLabelText(/Exercise history/i));
-    expect(document.querySelector('.panel')!.textContent).toMatch(/No recorded sessions/i);
+    await openExercise('mon', 'Razor Curl Progressions');
+    await userEvent.click(screen.getByRole('button', { name: /Previous workouts/i }));
+    expect(document.querySelector('.historydrawer')!.textContent).toMatch(/No previous workouts/i);
   });
 });
 
@@ -1100,7 +1090,9 @@ describe('carrying load to a new set', () => {
     });
     s = reducer(s, { type: 'addSet', date: 'd', day: 'mon', exId: 'hens', defaults: 4, now: NOW });
     const sets = s.sessions.d.exercises.hens;
-    expect(sets[sets.length - 1]).toEqual({ reps: '', load: '75', done: false });
+    expect(sets[sets.length - 1]).toEqual({
+      reps: '', load: '75', loadUnit: 'lb', done: false,
+    });
   });
 
   it('takes the most recent load when earlier sets are blank', () => {
@@ -1143,9 +1135,7 @@ describe('per-exercise notes', () => {
 
   it('is editable from the detail view', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
-    await userEvent.click([...document.querySelectorAll('.orow')]
-      .find((r) => r.textContent?.includes('Razor Curl'))!);
+    await openExercise('mon', 'Razor Curl Progressions');
     await userEvent.type(screen.getByLabelText(/Notes for Razor Curl/i), 'low ROM');
     const store = read();
     expect(store.sessions[Object.keys(store.sessions)[0]].exerciseNotes!.razor).toBe('low ROM');
@@ -1174,18 +1164,19 @@ describe('session lifecycle', () => {
 
   it('offers Complete once work is logged, and locks on confirm', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'mon');
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), 'mon');
+    await userEvent.click(screen.getByRole('button', { name: 'Open Lower A' }));
     expect(document.querySelector('.btn.complete')).toBeNull();
 
     await userEvent.click([...document.querySelectorAll('.orow')]
       .find((r) => r.textContent?.includes('Heels Elevated Narrow Squat'))!);
     await userEvent.click(document.querySelector('.dset .tick')!);
-    await userEvent.click(screen.getByLabelText(/Back to the session list/i));
+    await userEvent.click(screen.getByLabelText(/Back to the workout list/i));
 
     await userEvent.click(document.querySelector('.btn.complete')!);
     const store = read();
     expect(store.sessions[Object.keys(store.sessions)[0]].completedAt).toBeTruthy();
-    expect(document.querySelector('.locknote')!.textContent).toMatch(/Session locked in/i);
+    expect(document.querySelector('.locknote')!.textContent).toMatch(/Workout locked in/i);
   });
 });
 
@@ -1221,7 +1212,7 @@ describe('dashboard', () => {
     });
     render(<App />);
     await userEvent.click(screen.getByRole('button', { name: 'Dashboard' }));
-    expect(screen.getByText(/1 sessions logged · 1 check-ins/)).toBeInTheDocument();
+    expect(screen.getByText(/1 workouts logged · 1 check-ins/)).toBeInTheDocument();
   });
 
   it('marks trained days on the calendar and flags readiness', async () => {
@@ -1319,10 +1310,11 @@ describe('upper body sessions', () => {
       },
     }));
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'tue');
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), 'tue');
+    await userEvent.click(screen.getByRole('button', { name: 'Open Upper 1' }));
     const row = [...document.querySelectorAll('.orow')]
       .find((r) => r.textContent?.includes('Bench Press'))!;
-    expect(row.querySelector('.olast')!.textContent).toMatch(/85×5, 90×6/);
+    expect(row.querySelector('.olast')!.textContent).toMatch(/85 lb × 5, 90 lb × 6/);
   });
 });
 
@@ -1359,7 +1351,7 @@ describe('session clock', () => {
 
   it('shows no clock in the UI until work is logged', async () => {
     render(<App />);
-    await userEvent.selectOptions(screen.getByLabelText('Session'), 'tue');
+    await userEvent.selectOptions(screen.getByLabelText('Day plan'), 'tue');
     expect(document.querySelector('.stats')).toBeNull();
   });
 });

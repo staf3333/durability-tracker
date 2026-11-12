@@ -1,97 +1,231 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Block, Status } from '../types';
-import { TEMPLATES, DAY_ORDER } from '../data/templates';
+import type { Block, PlannedWorkout, Status } from '../types';
+import { DAY_ORDER, TEMPLATES } from '../data/templates';
+import {
+  dateReadiness, plannedWorkouts, workoutRecordId, workoutSession,
+} from '../data/workouts';
 import { useStore } from '../state/store';
-import { countDone, sessionHasData, sessionVolume, setsOf } from '../lib/plan';
+import { countDone, effective, membersInRound, sessionVolumes, setsOf } from '../lib/plan';
 import { BlockView } from './BlockView';
 import { SessionOverview } from './SessionOverview';
 import { ExerciseDetail } from './ExerciseDetail';
 import { flatten, nextIndex, prevIndex } from '../lib/session';
 import { useCountdown } from './Timers';
 import { useRest } from '../state/RestTimer';
-import { effective } from '../lib/plan';
-
+import { useWakeLock } from '../state/useWakeLock';
+import { workoutElapsedSeconds } from '../lib/duration';
 
 const DAY_LABELS: Record<string, string> = {
-  mon: 'Mon · Lower A', tue: 'Tue · Shooting', wed: 'Wed · Lower B',
-  thu: 'Thu · Microdose', fri: 'Fri · Basketball', sat: 'Sat · Basketball',
-  sun: 'Sun · Off', dunk: 'Dunk ladder',
+  mon: 'Mon · Lower A', tue: 'Tue · Shooting + Upper', wed: 'Wed · Lower B',
+  thu: 'Thu · Microdose + Upper', fri: 'Fri · Basketball', sat: 'Sat · Basketball + Upper',
+  sun: 'Sun · Recovery', dunk: 'Dunk ladder',
 };
 
 const GATE: Record<Status, { cls: string; text: string }> = {
-  green: { cls: 'note', text: 'Green. Run the session as written. Progress one variable only.' },
+  green: { cls: 'note', text: 'Green. Run the workout as written. Progress one variable only.' },
   yellow: { cls: 'note warn', text: 'Yellow. Cut contacts 30–50%, use bilateral instead of unilateral, drop load or range 10–20%. Keep the primary lift if it feels clean. Do not progress.' },
   red: { cls: 'note stop', text: 'Red. No jumping, sprinting, hard cutting or loaded end-range today. Mobility and pain-free movement only.' },
 };
 
-export function TodayView({ date, day, setDay }: { date: string; day: string; setDay: (d: string) => void }) {
+export function TodayView({
+  date, day, setDay,
+}: { date: string; day: string; setDay: (day: string) => void }) {
   const { store, dispatch } = useStore();
-  const session = store.sessions[date];
-  const tpl = TEMPLATES[day];
+  const [activeWorkoutId, setActiveWorkoutId] = useState<string | null>(null);
+  const workouts = plannedWorkouts(day);
+  const readiness = dateReadiness(store, date);
+
+  useEffect(() => setActiveWorkoutId(null), [day]);
+
+  const openWorkout = (workout: PlannedWorkout) => {
+    const existing = workoutSession(store, date, workout.id);
+    if (!existing) {
+      dispatch({
+        type: 'createWorkout',
+        id: workoutRecordId(date, workout.id),
+        date,
+        day,
+        workoutId: workout.id,
+        readiness,
+      });
+    }
+    setActiveWorkoutId(workout.id);
+  };
+
+  if (activeWorkoutId) {
+    const workout = workouts.find((candidate) => candidate.id === activeWorkoutId);
+    if (workout) {
+      const existing = workoutSession(store, date, workout.id);
+      return (
+        <WorkoutLogger
+          key={workout.id}
+          date={date}
+          day={day}
+          workout={workout}
+          sessionId={existing?.[0] ?? workoutRecordId(date, workout.id)}
+          onBack={() => setActiveWorkoutId(null)}
+        />
+      );
+    }
+  }
+
+  return (
+    <section>
+      <label className="f">
+        <span>Day plan</span>
+        <select className="t" value={day} onChange={(event) => setDay(event.target.value)}
+          aria-label="Day plan">
+          {DAY_ORDER.map((id) => <option key={id} value={id}>{DAY_LABELS[id] ?? id}</option>)}
+        </select>
+      </label>
+
+      <div className="dayintro">
+        <h2>{TEMPLATES[day].name}</h2>
+        <p>{TEMPLATES[day].sub}</p>
+      </div>
+      {readiness?.status
+        ? <div className={GATE[readiness.status].cls}>{GATE[readiness.status].text}</div>
+        : <div className="note warn"><b>No check-in yet.</b> Do the morning check first — it decides today's volume.</div>}
+      <p className="daycue">{TEMPLATES[day].note}</p>
+
+      <div className="workoutlist">
+        {workouts.map((workout) => {
+          const entry = workoutSession(store, date, workout.id);
+          const session = entry?.[1];
+          const done = countDone(session);
+          const total = workout.blocks.reduce((sum, block) =>
+            sum + block.exercises.reduce((blockSum, exercise) =>
+              blockSum + setsOf(session, exercise).length, 0), 0);
+          const status = session?.completedAt
+            ? 'Completed'
+            : session?.startedAt || done > 0
+              ? 'In progress'
+              : 'Not started';
+          const progress = total ? Math.round((done / total) * 100) : 0;
+          return (
+            <button key={workout.id} className="workoutcard"
+              onClick={() => openWorkout(workout)}
+              aria-label={`Open ${workout.name}`}>
+              <span className="workoutmain">
+                <b>{workout.name}</b>
+                <small>{workout.blocks.map((block) => block.title).join(' · ')}</small>
+                <span className="workoutprogress" aria-hidden>
+                  <i style={{ width: `${progress}%` }} />
+                </span>
+              </span>
+              <span className={`workoutstatus ${status.toLowerCase().replace(' ', '-')}`}>
+                {status}
+                <small>{done}/{total} sets</small>
+              </span>
+              <span className="workoutchev" aria-hidden>›</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function WorkoutLogger({
+  date, day, workout, sessionId, onBack,
+}: {
+  date: string;
+  day: string;
+  workout: PlannedWorkout;
+  sessionId: string;
+  onBack: () => void;
+}) {
+  const { store, dispatch } = useStore();
+  const session = store.sessions[sessionId];
   const [toast, setToast] = useState('');
   const [openIndex, setOpenIndex] = useState<number | null>(null);
   const [expanded, setExpanded] = useState(false);
-
   const rest = useRest();
+  const flat = useMemo(() => flatten(workout.blocks), [workout]);
+  const locked = !!session?.completedAt;
+
   const setTimer = useCountdown((key, total) => {
     const [exId, idx] = key.split(':');
-    dispatch({ type: 'completeTimedSet', date, day, exId, index: +idx, value: fmt(total) });
+    startAutomaticRest(exId, +idx, false);
+    dispatch({
+      type: 'completeTimedSet', date: sessionId, day, exId, index: +idx,
+      value: fmt(total), defaults: flat.find((item) => item.ex.id === exId)?.ex.sets,
+    });
     setToast('Set complete');
     setTimeout(() => setToast(''), 1800);
   });
 
-  const flat = useMemo(() => flatten(tpl.blocks), [tpl]);
+  function startAutomaticRest(exId: string, index: number, wasDone: boolean) {
+    if (wasDone) return;
+    const item = flat.find((candidate) => candidate.ex.id === exId);
+    if (!item) return;
+    if (item.block.mode === 'straight') {
+      const exercise = effective(item.ex, store);
+      if (exercise.rest) {
+        rest.start(`${exId}:${index}`, `${exercise.name} · set ${index + 1}`, exercise.rest);
+      }
+      return;
+    }
+    const members = membersInRound(item.block, session, index);
+    const finalMember = members.every((member) =>
+      member.id === exId || !!session?.exercises[member.id]?.[index]?.done);
+    if (!finalMember) return;
+    const seconds = members.reduce((max, member) =>
+      Math.max(max, effective(member, store).rest ?? 0), 0);
+    if (seconds) {
+      rest.start(
+        `${item.blockIndex}:${index}`,
+        `${item.block.mode === 'superset' ? 'Superset' : 'Circuit'} · round ${index + 1}`,
+        seconds,
+      );
+    }
+  }
 
   const handlers = {
-    onField: (exId: string, index: number, field: 'reps' | 'load', value: string) =>
-      dispatch({ type: 'setSetField', date, day, exId, index, field, value }),
+    onField: (
+      exId: string, index: number,
+      field: 'reps' | 'load' | 'loadUnit' | 'distance', value: string,
+    ) => {
+      if (locked) return;
+      dispatch({
+        type: 'setSetField', date: sessionId, day, exId, index, field, value,
+        defaults: flat.find((item) => item.ex.id === exId)?.ex.sets,
+      });
+    },
     onToggle: (exId: string, index: number) => {
+      if (locked) return;
       const wasDone = !!session?.exercises[exId]?.[index]?.done;
-      dispatch({ type: 'toggleDone', date, day, exId, index });
-      const base = flat.find((f) => f.ex.id === exId)?.ex;
-      const ex = base ? effective(base, store) : undefined;
-      if (ex?.rest && !wasDone) {
-        rest.start(`${exId}:${index}`, `${ex.name} · set ${index + 1}`, ex.rest);
-      }
+      startAutomaticRest(exId, index, wasDone);
+      dispatch({
+        type: 'toggleDone', date: sessionId, day, exId, index,
+        defaults: flat.find((item) => item.ex.id === exId)?.ex.sets,
+      });
     },
     onTimer: (exId: string, index: number, seconds: number) =>
-      setTimer.toggle(`${exId}:${index}`, seconds),
+      !locked && setTimer.toggle(`${exId}:${index}`, seconds),
     onAddSet: (exId: string, defaults: number) =>
-      dispatch({ type: 'addSet', date, day, exId, defaults }),
+      !locked && dispatch({ type: 'addSet', date: sessionId, day, exId, defaults }),
     onRemoveSet: (exId: string, index: number) =>
-      dispatch({ type: 'removeSet', date, day, exId, index }),
-    onRest: (sec: number, exId?: string, index?: number) =>
-      rest.start(`${exId ?? 'manual'}:${index ?? 0}`, exId ? `${exId} · rest` : 'Rest', sec),
+      !locked && dispatch({ type: 'removeSet', date: sessionId, day, exId, index }),
+    onRest: (seconds: number, exId?: string, index?: number) =>
+      rest.start(`${exId ?? 'manual'}:${index ?? 0}`, exId ? `${exId} · rest` : 'Rest', seconds),
     onPref: (exId: string, pref: import('../types').ExercisePref) =>
-      dispatch({ type: 'setExercisePref', exId, pref }),
+      !locked && dispatch({ type: 'setExercisePref', exId, pref }),
     onNote: (exId: string, note: string) =>
-      dispatch({ type: 'setExerciseNote', date, day, exId, note }),
+      !locked && dispatch({ type: 'setExerciseNote', date: sessionId, day, exId, note }),
+    onSetup: (exId: string, setup: string) =>
+      !locked && dispatch({ type: 'setExerciseSetup', date: sessionId, day, exId, setup }),
   };
 
   const defaultsFor = useMemo(() => {
-    const m: Record<string, number> = {};
-    tpl.blocks.forEach((b) => b.exercises.forEach((x) => { m[x.id] = x.sets; }));
-    return m;
-  }, [tpl]);
+    const defaults: Record<string, number> = {};
+    workout.blocks.forEach((block) =>
+      block.exercises.forEach((exercise) => { defaults[exercise.id] = exercise.sets; }));
+    return defaults;
+  }, [workout]);
 
-  function changeDay(next: string) {
-    if (session && session.day !== next && sessionHasData(session)) {
-      const okay = window.confirm(
-        `You have already logged a "${TEMPLATES[session.day]?.name ?? session.day}" session today.\n\n` +
-        `Switching will re-label that log as "${TEMPLATES[next]?.name ?? next}". Continue?`);
-      if (!okay) return;
-    }
-    setTimer.stop();
-    setDay(next);
-    dispatch({ type: 'setDay', date, day: next });
-  }
-
-  const status = session?.readiness?.status;
-  const volume = sessionVolume(session);
+  const volumes = sessionVolumes(session);
   const done = countDone(session);
-  const locked = !!session?.completedAt;
-
-  // Session clock: runs from the first logged activity until it is locked in.
   const [nowTick, setNowTick] = useState(Date.now());
   useEffect(() => {
     if (!session?.startedAt || locked) return;
@@ -99,72 +233,81 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
     return () => clearInterval(id);
   }, [session?.startedAt, locked]);
 
-  const elapsed = session?.startedAt
-    ? Math.max(0, Math.round(
-        ((locked && session.completedAt ? Date.parse(session.completedAt) : nowTick)
-          - Date.parse(session.startedAt)) / 1000))
-    : 0;
+  const elapsed = workoutElapsedSeconds(session, nowTick);
   const clock = elapsed >= 3600
     ? `${Math.floor(elapsed / 3600)}h ${String(Math.floor((elapsed % 3600) / 60)).padStart(2, '0')}m`
     : `${Math.floor(elapsed / 60)}m ${String(elapsed % 60).padStart(2, '0')}s`;
+  useWakeLock(!!session?.startedAt && !locked);
+
+  const goBack = () => {
+    setTimer.stop();
+    onBack();
+  };
 
   return (
     <section>
-      {(done > 0 || volume > 0 || session?.startedAt) && (
+      <div className="workouttitlebar">
+        <button className="mini workoutback" onClick={goBack}
+          aria-label="Back to day">‹ Day</button>
+        <div><h2>{workout.name}</h2><p>{workout.sub}</p></div>
+      </div>
+      <p className="workoutcue">{workout.note}</p>
+
+      {(done > 0 || volumes.lb > 0 || volumes.kg > 0 || session?.startedAt) && (
         <div className={`stats${locked ? ' locked' : ''}`}>
           <div><b>{clock}</b><span>{locked ? 'total' : 'elapsed'}</span></div>
           <div><b>{done}</b><span>sets done</span></div>
-          <div><b>{volume ? volume.toLocaleString() : '—'}</b><span>lbs moved</span></div>
+          <div>
+            <b>{[
+              volumes.lb ? `${volumes.lb.toLocaleString()} lb` : '',
+              volumes.kg ? `${volumes.kg.toLocaleString()} kg` : '',
+            ].filter(Boolean).join(' · ') || '—'}</b>
+            <span>volume</span>
+          </div>
         </div>
       )}
 
       {locked && (
         <div className="note locknote">
-          <b>Session locked in.</b> Finished {new Date(session!.completedAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.
+          <b>Workout locked in.</b> Finished {new Date(session!.completedAt!).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}.
           <button className="mini" style={{ marginLeft: 10 }}
-            onClick={() => dispatch({ type: 'reopenSession', date, day })}>Edit anyway</button>
+            onClick={() => dispatch({ type: 'reopenSession', date: sessionId, day })}>Edit anyway</button>
         </div>
       )}
-      <label className="f">
-        <span>Session</span>
-        <select className="t" value={day} onChange={(e) => changeDay(e.target.value)} aria-label="Session">
-          {DAY_ORDER.map((d) => <option key={d} value={d}>{DAY_LABELS[d] ?? d}</option>)}
-        </select>
-      </label>
-
-      {status
-        ? <div className={GATE[status].cls}>{GATE[status].text}</div>
-        : <div className="note warn"><b>No check-in yet.</b> Do the morning check first — it decides today's volume.</div>}
-
-      <h2>{tpl.name}</h2>
-      <p className="sub">{tpl.sub}</p>
-      <div className="note">{tpl.note}</div>
 
       {openIndex === null ? (
         <>
-          <button className="viewtog" onClick={() => setExpanded((e) => !e)}>
+          <button className="viewtog" onClick={() => setExpanded((value) => !value)}>
             {expanded ? 'Compact list' : 'Expand all sets'}
           </button>
-
-          {expanded ? tpl.blocks.map((block, i) => (
+          {expanded ? workout.blocks.map((block, index) => (
             <BlockView
-              key={i}
+              key={index}
               block={block} session={session} store={store} date={date} timer={setTimer.timer}
+              locked={locked}
               {...handlers}
-              onRest={(sec: number) => rest.start('manual:0', 'Rest', sec)}
-              onAddRound={(b: Block) => dispatch({
-                type: 'addRound', date, day,
-                exIds: b.exercises.map((x) => x.id), defaults: defaultsFor,
+              onRest={(seconds: number) => rest.start('manual:0', 'Rest', seconds)}
+              onAddRound={(group: Block) => dispatch({
+                type: 'addRound', date: sessionId, day,
+                exIds: group.exercises.map((exercise) => exercise.id), defaults: defaultsFor,
               })}
-              onRemoveRound={(b: Block) => {
-                const min = b.exercises.reduce((n, ex) => Math.max(n, setsOf(session, ex).length), 1);
-                if (min <= 1) { setToast('Keep at least one round'); setTimeout(() => setToast(''), 1800); return; }
-                dispatch({ type: 'removeRound', date, day, exIds: b.exercises.map((x) => x.id) });
+              onRemoveRound={(group: Block) => {
+                const min = group.exercises.reduce((count, exercise) =>
+                  Math.max(count, setsOf(session, exercise).length), 1);
+                if (min <= 1) {
+                  setToast('Keep at least one round');
+                  setTimeout(() => setToast(''), 1800);
+                  return;
+                }
+                dispatch({
+                  type: 'removeRound', date: sessionId, day,
+                  exIds: group.exercises.map((exercise) => exercise.id),
+                });
               }}
             />
           )) : (
             <SessionOverview
-              blocks={tpl.blocks} session={session} store={store} date={date}
+              blocks={workout.blocks} session={session} store={store} date={date}
               onOpen={setOpenIndex}
             />
           )}
@@ -172,11 +315,12 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
           {done > 0 && !locked && (
             <button className="btn complete" onClick={() => {
               if (window.confirm(
-                `Lock in this session?\n\n${done} sets · ${clock}`
-                + `${volume ? ` · ${volume.toLocaleString()} lbs` : ''}`
+                `Lock in this workout?\n\n${done} sets · ${clock}`
+                + `${volumes.lb ? ` · ${volumes.lb.toLocaleString()} lb` : ''}`
+                + `${volumes.kg ? ` · ${volumes.kg.toLocaleString()} kg` : ''}`
                 + '\n\nYou can still edit it afterwards.')) {
-                dispatch({ type: 'completeSession', date, day });
-                setToast('Session locked in');
+                dispatch({ type: 'completeSession', date: sessionId, day });
+                setToast('Workout locked in');
                 setTimeout(() => setToast(''), 2200);
               }
             }}>
@@ -187,9 +331,9 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
       ) : (
         <ExerciseDetail
           current={flat[openIndex]}
-          next={(() => { const n = nextIndex(flat, openIndex, session); return n == null ? null : flat[n]; })()}
-          prev={(() => { const n = prevIndex(openIndex); return n == null ? null : flat[n]; })()}
-          session={session} store={store} date={date} timer={setTimer.timer}
+          next={(() => { const next = nextIndex(flat, openIndex, session); return next == null ? null : flat[next]; })()}
+          prev={(() => { const previous = prevIndex(openIndex); return previous == null ? null : flat[previous]; })()}
+          session={session} sessionId={sessionId} store={store} date={date} timer={setTimer.timer}
           {...handlers}
           locked={locked}
           onGo={setOpenIndex}
@@ -197,14 +341,18 @@ export function TodayView({ date, day, setDay }: { date: string; day: string; se
         />
       )}
 
-      <h3>Session notes</h3>
-      <textarea
-        className="t"
-        placeholder="Basketball minutes, RPE, how it felt…"
-        value={session?.notes ?? ''}
-        onChange={(e) => dispatch({ type: 'setNotes', date, day, notes: e.target.value })}
-      />
-
+      <details className="workoutnotes">
+        <summary>Workout notes{session?.notes ? ' · saved' : ''}</summary>
+        <textarea
+          className="t"
+          placeholder="Minutes, RPE, how it felt…"
+          value={session?.notes ?? ''}
+          onChange={(event) => dispatch({
+            type: 'setNotes', date: sessionId, day, notes: event.target.value,
+          })}
+          disabled={locked}
+        />
+      </details>
       <div className={`toast${toast ? ' on' : ''}`}>{toast}</div>
     </section>
   );

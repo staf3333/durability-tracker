@@ -3,7 +3,7 @@ import { PJF, effective, fmtSec, lastPerformance, setsOf, summarisePast } from '
 import type { FlatExercise } from '../lib/session';
 import type { ExercisePref, Session, Store } from '../types';
 import { SetRow } from './SetRow';
-import { ExerciseHistory } from './ExerciseHistory';
+import { ExerciseHistory, exerciseHistoryCount } from './ExerciseHistory';
 import type { TimerState } from './Timers';
 
 interface Props {
@@ -11,10 +11,11 @@ interface Props {
   next: FlatExercise | null;
   prev: FlatExercise | null;
   session: Session | undefined;
+  sessionId: string;
   store: Store;
   date: string;
   timer: TimerState | null;
-  onField: (exId: string, i: number, f: 'reps' | 'load', v: string) => void;
+  onField: (exId: string, i: number, f: 'reps' | 'load' | 'loadUnit' | 'distance', v: string) => void;
   onToggle: (exId: string, i: number) => void;
   onTimer: (exId: string, i: number, seconds: number) => void;
   onAddSet: (exId: string, defaults: number) => void;
@@ -22,6 +23,7 @@ interface Props {
   onRest: (seconds: number, exId?: string, index?: number) => void;
   onPref: (exId: string, pref: ExercisePref) => void;
   onNote: (exId: string, note: string) => void;
+  onSetup: (exId: string, setup: string) => void;
   locked?: boolean;
   onGo: (index: number) => void;
   onClose: () => void;
@@ -38,20 +40,25 @@ export function ExerciseDetail(p: Props) {
   const past = lastPerformance(p.store, p.date, ex.id);
   const grouped = block.mode !== 'straight';
   const unit = grouped ? 'round' : 'set';
+  const historyCount = exerciseHistoryCount(p.store, ex.id, p.sessionId);
 
   const toggle = (next: Panel) => setPanel((cur) => (cur === next ? 'none' : next));
 
   return (
     <div className="detail">
       <div className="dbar">
-        <button className="dback" onClick={p.onClose} aria-label="Back to the session list">
-          <span aria-hidden>‹</span> Session
+        <button className="dback" onClick={p.onClose} aria-label="Back to the workout list">
+          <span aria-hidden>‹</span> Workout
         </button>
         <div className="dtools">
+          <button className={`dtoolhistory${panel === 'history' ? ' on' : ''}`}
+            onClick={() => toggle('history')}
+            aria-expanded={panel === 'history'}
+            aria-label={`Previous workouts, ${historyCount} recorded`}>
+            History <b>{historyCount}</b>
+          </button>
           <button className={panel === 'settings' ? 'on' : ''} onClick={() => toggle('settings')}
             aria-label="Exercise settings" aria-pressed={panel === 'settings'}>⚙</button>
-          <button className={panel === 'history' ? 'on' : ''} onClick={() => toggle('history')}
-            aria-label="Exercise history" aria-pressed={panel === 'history'}>🕘</button>
         </div>
       </div>
 
@@ -83,8 +90,49 @@ export function ExerciseDetail(p: Props) {
               onChange={(e) => p.onPref(ex.id, { load: e.target.checked })}
               aria-label="Track load"
             />
-            <span>Load<small>adds a lb field</small></span>
+            <span>Load<small>adds a load field</small></span>
           </label>
+
+          {ex.weight && (
+            <label className="prow num">
+              <span>Default load unit</span>
+              <select
+                value={ex.loadUnit ?? 'lb'}
+                onChange={(e) => p.onPref(ex.id, { loadUnit: e.target.value as 'lb' | 'kg' })}
+                aria-label="Default load unit"
+              >
+                <option value="lb">lb</option>
+                <option value="kg">kg</option>
+              </select>
+            </label>
+          )}
+
+          <label className="prow">
+            <input
+              type="checkbox"
+              checked={!!ex.distance}
+              onChange={(e) => p.onPref(ex.id, { distance: e.target.checked })}
+              aria-label="Track distance"
+            />
+            <span>Distance<small>adds a distance field to each {unit}</small></span>
+          </label>
+
+          {ex.distance && (
+            <label className="prow num">
+              <span>Distance unit</span>
+              <select
+                value={ex.distanceUnit ?? 'm'}
+                onChange={(e) => p.onPref(ex.id, {
+                  distanceUnit: e.target.value as 'm' | 'km' | 'mi',
+                })}
+                aria-label="Distance unit"
+              >
+                <option value="m">m</option>
+                <option value="km">km</option>
+                <option value="mi">mi</option>
+              </select>
+            </label>
+          )}
 
           <label className="prow">
             <input
@@ -134,12 +182,6 @@ export function ExerciseDetail(p: Props) {
         </div>
       )}
 
-      {panel === 'history' && (
-        <div className="panel" role="group" aria-label="Exercise history">
-          <ExerciseHistory exId={ex.id} store={p.store} startOpen />
-        </div>
-      )}
-
       {ex.note && <p className="dnote">{ex.note}</p>}
 
       {past && (
@@ -147,6 +189,23 @@ export function ExerciseDetail(p: Props) {
           <b>{past.imported ? 'PJF' : 'Last time'}</b> {summarisePast(past)}
           <span>{past.date}</span>
         </div>
+      )}
+
+      {panel === 'history' && (
+        <>
+          <button className="historybackdrop" onClick={() => setPanel('none')}
+            aria-label="Close previous workouts" />
+          <aside className="historydrawer" role="dialog" aria-modal="true"
+            aria-label={`Previous ${ex.name} workouts`}>
+            <div className="historydrawerhead">
+              <span><b>Previous workouts</b><small>{ex.name} · {historyCount} recorded</small></span>
+              <button onClick={() => setPanel('none')} aria-label="Close previous workouts">×</button>
+            </div>
+            <ExerciseHistory
+              exId={ex.id} store={p.store} startOpen excludeSessionId={p.sessionId}
+            />
+          </aside>
+        </>
       )}
 
       {sets.map((entry, i) => (
@@ -160,12 +219,24 @@ export function ExerciseDetail(p: Props) {
           </div>
           <SetRow
             ex={ex} index={i} entry={entry} timer={p.timer} past={past?.sets[i]}
+            disabled={p.locked}
             onField={(f, v) => p.onField(ex.id, i, f, v)}
             onToggle={() => p.onToggle(ex.id, i)}
             onTimer={() => p.onTimer(ex.id, i, ex.seconds ?? 0)}
           />
         </div>
       ))}
+
+      <label className="exnote">
+        <span>Setup or equipment variant</span>
+        <input
+          value={p.session?.exerciseSetups?.[ex.id] ?? ''}
+          onChange={(e) => p.onSetup(ex.id, e.target.value)}
+          placeholder="e.g. Smith machine, belt squat, assisted dip"
+          aria-label={`Setup for ${ex.name}`}
+          disabled={p.locked}
+        />
+      </label>
 
       <label className="exnote">
         <span>Notes for this exercise</span>

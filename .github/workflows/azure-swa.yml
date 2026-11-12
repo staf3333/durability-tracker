@@ -3,9 +3,6 @@ name: Deploy to Azure Static Web Apps
 on:
   push:
     branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches: [main]
 
 concurrency:
   group: swa-${{ github.ref }}
@@ -13,7 +10,6 @@ concurrency:
 
 jobs:
   build_and_deploy:
-    if: github.event_name == 'push' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +23,8 @@ jobs:
           npm ci
           npm test
           npm run build
+          npx playwright install --with-deps chromium
+          npx playwright test
 
       - name: Test the API
         working-directory: api
@@ -44,12 +42,3 @@ jobs:
           api_location: api
           skip_app_build: true
           skip_api_build: false
-
-  close_pr:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: Azure/static-web-apps-deploy@v1
-        with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          action: close

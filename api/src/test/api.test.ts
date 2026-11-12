@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { HttpRequest } from '@azure/functions';
 import { getPrincipal } from '../lib/auth';
+import { validWorkoutRecordId } from '../lib/workout';
 
 const principalHeader = (obj: unknown) =>
   Buffer.from(JSON.stringify(obj), 'utf8').toString('base64');
@@ -14,6 +15,18 @@ describe('principal parsing', () => {
       userId: 'github|123', userDetails: 'staf3333', identityProvider: 'github',
     })));
     expect(p).toEqual({ userId: 'github|123', userDetails: 'staf3333', identityProvider: 'github' });
+  });
+
+  describe('workout record identifiers', () => {
+    it('accepts legacy date keys and stable planned workout ids', () => {
+      expect(validWorkoutRecordId('2026-10-29')).toBe(true);
+      expect(validWorkoutRecordId('2026-10-29--upper-1')).toBe(true);
+    });
+
+    it('rejects keys that are not Azure-safe workout record ids', () => {
+      expect(validWorkoutRecordId('2026-10-29/upper-1')).toBe(false);
+      expect(validWorkoutRecordId('upper-1')).toBe(false);
+    });
   });
 
   it('rejects a missing header', () => {

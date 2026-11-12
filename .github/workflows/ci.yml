@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Client unit, lint, and build
+        run: |
+          npm ci
+          npm test
+          npm run lint
+          npm run build
+
+      - name: API tests and build
+        working-directory: api
+        run: |
+          npm ci
+          npm test
+          npm run build
+
+      - name: Browser E2E
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test

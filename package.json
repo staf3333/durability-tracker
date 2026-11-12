@@ -9,6 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "test:e2e:staging": "VITE_DEPLOY_ENV=staging VITE_STAGING_DEFAULT_HOST=black-forest-0d267be1e.5.azurestaticapps.net GITHUB_SHA=local-staging npm run build && STAGING_SMOKE=1 STAGING_EXPECTED_ORIGIN=http://127.0.0.1:4173 playwright test e2e/staging-smoke.spec.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -16,6 +18,7 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",

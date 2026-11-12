@@ -7,6 +7,8 @@ import { DashboardView } from './components/DashboardView';
 import { defaultDay, fmtDate, todayKey } from './lib/plan';
 import { useSync } from './state/useSync';
 import { ConflictBanner, SignedOutNote, SyncChip } from './components/SyncUI';
+import { dateReadiness } from './data/workouts';
+import { isStaging } from './lib/environment';
 
 const TABS = [
   ['today', 'Today'], ['check', 'Check-in'], ['dash', 'Dashboard'],
@@ -18,12 +20,18 @@ function Shell() {
   const [tab, setTab] = useState<Tab>('today');
   const [date] = useState(todayKey);
   const { store, dispatch } = useStore();
-  const [day, setDay] = useState(() => store.sessions[todayKey()]?.day ?? defaultDay());
-  const status = store.sessions[date]?.readiness?.status;
+  const [day, setDay] = useState<string>(defaultDay);
+  const readiness = dateReadiness(store, date);
+  const status = readiness?.status;
   const sync = useSync();
 
   return (
     <div className="wrap">
+      {isStaging && (
+        <div className="envbanner" role="status">
+          STAGING · synthetic data only · build {__BUILD_ID__}
+        </div>
+      )}
       <header>
         <div className="hrow">
           <div><h1>Durability Tracker</h1><div className="wk">{fmtDate(date)}</div></div>
@@ -56,14 +64,16 @@ function Shell() {
       )}
       {sync.status === 'signedOut' && tab === 'today' && <SignedOutNote onSignIn={sync.signIn} />}
 
-      {tab === 'today' && <TodayView date={date} day={day} setDay={setDay} />}
-      {tab === 'check' && <CheckInView date={date} day={day} />}
+      {tab === 'today' && (
+        <TodayView date={date} day={day} setDay={setDay} />
+      )}
+      {tab === 'check' && <CheckInView calendarDate={date} day={day} />}
       {tab === 'dash' && <DashboardView />}
       {tab === 'history' && <HistoryView />}
       {tab === 'export' && <ExportView />}
       {tab === 'rules' && <RulesView />}
       <RestBar />
-      <div className="buildid">build {__BUILD_ID__}</div>
+      <div className="buildid">{__DEPLOY_ENV__} · build {__BUILD_ID__}</div>
     </div>
   );
 }

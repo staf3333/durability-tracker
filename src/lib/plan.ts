@@ -1,5 +1,8 @@
-import type { Block, Exercise, Session, SetEntry, Store, Template } from '../types';
+import type {
+  Block, DistanceUnit, Exercise, LoadUnit, Session, SetEntry, Store, Template,
+} from '../types';
 import { TEMPLATES } from '../data/templates';
+import { sessionDate, workoutName } from '../data/workouts';
 
 export const PJF = 'https://online.pjfperformance.net/exercises/';
 
@@ -22,7 +25,20 @@ export function fmtDate(key: string) {
 }
 
 export const setsOf = (session: Session | undefined, ex: Exercise): SetEntry[] =>
-  session?.exercises[ex.id] ?? Array.from({ length: ex.sets }, () => ({ reps: '', load: '', done: false }));
+  session?.exercises[ex.id] ?? Array.from({ length: ex.sets }, () => ({
+    reps: '', load: '', loadUnit: ex.loadUnit ?? 'lb', done: false,
+  }));
+
+export const loadUnitOf = (set: SetEntry): LoadUnit => set.loadUnit ?? 'lb';
+export const distanceUnitOf = (set: SetEntry, fallback: DistanceUnit = 'm'): DistanceUnit =>
+  set.distanceUnit ?? fallback;
+
+export function formatSet(set: SetEntry, distanceUnit: DistanceUnit = 'm') {
+  const load = set.load ? `${set.load} ${loadUnitOf(set)} × ` : '';
+  const reps = set.reps || '?';
+  const distance = set.distance ? ` · ${set.distance} ${distanceUnitOf(set, distanceUnit)}` : '';
+  return `${load}${reps}${distance}`;
+}
 
 export const isGrouped = (b: Block) => b.mode !== 'straight';
 
@@ -57,11 +73,19 @@ export interface PastPerformance {
 export function lastPerformance(
   store: Store, beforeDate: string, exId: string,
 ): PastPerformance | null {
-  const keys = Object.keys(store.sessions).filter((k) => k < beforeDate).sort().reverse();
-  for (const k of keys) {
-    const sets = store.sessions[k].exercises[exId];
+  const entries = Object.entries(store.sessions)
+    .filter(([id, session]) => sessionDate(id, session) < beforeDate && !session.deletedAt)
+    .sort((a, b) => {
+      const byDate = sessionDate(b[0], b[1]).localeCompare(sessionDate(a[0], a[1]));
+      return byDate || b[1].updatedAt.localeCompare(a[1].updatedAt);
+    });
+  for (const [id, session] of entries) {
+    const sets = session.exercises[exId];
     if (sets?.some((s) => s.done || s.reps || s.load)) {
-      return { date: k, sets: sets.filter((s) => s.done || s.reps || s.load) };
+      return {
+        date: sessionDate(id, session),
+        sets: sets.filter((s) => s.done || s.reps || s.load || s.distance),
+      };
     }
   }
   // Fall back to imported history, which a real log always supersedes.
@@ -71,19 +95,22 @@ export function lastPerformance(
 
 export function summarisePast(p: PastPerformance | null) {
   if (!p) return null;
-  return p.sets
-    .map((s) => (s.load ? `${s.load}×${s.reps || '?'}` : s.reps || '—'))
-    .join(', ');
+  return p.sets.map((s) => formatSet(s)).join(', ');
 }
 
-/** Total load moved this session — the "5,550 lbs" readout. */
-export function sessionVolume(session: Session | undefined) {
+/** Total load moved in one unit. Units are never implicitly combined. */
+export function sessionVolume(session: Session | undefined, unit: LoadUnit = 'lb') {
   if (!session) return 0;
   return Object.values(session.exercises).flat().reduce((sum, s) => {
+    if (loadUnitOf(s) !== unit) return sum;
     const load = parseFloat(s.load);
     const reps = parseFloat(s.reps);
     return sum + (Number.isFinite(load) && Number.isFinite(reps) ? load * reps : 0);
   }, 0);
+}
+
+export function sessionVolumes(session: Session | undefined): Record<LoadUnit, number> {
+  return { lb: sessionVolume(session, 'lb'), kg: sessionVolume(session, 'kg') };
 }
 
 export function countDone(session: Session | undefined) {
@@ -101,18 +128,24 @@ export function nameFor(day: string, exId: string): string {
 export function buildText(store: Store, days: number) {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - days);
-  const keys = Object.keys(store.sessions).sort().filter((k) => {
+  const entries = Object.entries(store.sessions)
+    .filter(([, session]) => !session.deletedAt)
+    .sort((a, b) => {
+      const byDate = sessionDate(a[0], a[1]).localeCompare(sessionDate(b[0], b[1]));
+      return byDate || a[1].updatedAt.localeCompare(b[1].updatedAt);
+    })
+    .filter(([id, session]) => {
     if (days >= 9999) return true;
-    const [y, m, d] = k.split('-').map(Number);
+    const [y, m, d] = sessionDate(id, session).split('-').map(Number);
     return new Date(y, m - 1, d) >= cutoff;
   });
-  if (!keys.length) return 'No sessions logged in this range.';
+  if (!entries.length) return 'No workouts logged in this range.';
 
   const out: string[] = ['DURABILITY LOG', ''];
-  for (const k of keys) {
-    const s = store.sessions[k];
+  for (const [id, s] of entries) {
+    const date = sessionDate(id, s);
     const r = s.readiness;
-    out.push(`${fmtDate(k)} · ${TEMPLATES[s.day]?.name ?? s.day} · ${r ? r.status.toUpperCase() : 'no check-in'}`);
+    out.push(`${fmtDate(date)} · ${workoutName(s)} · ${TEMPLATES[s.day]?.name ?? s.day} · ${r ? r.status.toUpperCase() : 'no check-in'}`);
     if (r) {
       const ktw = r.ktwR != null && r.ktwL != null
         ? `KTW R ${r.ktwR} / L ${r.ktwL}${r.ktwL ? ` (${Math.round((r.ktwR / r.ktwL) * 100)}%)` : ''}`
@@ -122,11 +155,13 @@ export function buildText(store: Store, days: number) {
       if (r.notes) out.push(`  Check-in note: ${r.notes}`);
     }
     for (const [exId, sets] of Object.entries(s.exercises)) {
-      const logged = sets.filter((x) => x.done || x.reps || x.load);
+      const logged = sets.filter((x) => x.done || x.reps || x.load || x.distance);
       if (!logged.length) continue;
       out.push(`  ${nameFor(s.day, exId)}: ` + logged
-        .map((x) => `${x.load ? `${x.load}×` : ''}${x.reps || '?'}${x.done ? '' : ' (not done)'}`)
+        .map((x) => `${formatSet(x)}${x.done ? '' : ' (not done)'}`)
         .join(', '));
+      if (s.exerciseSetups?.[exId]) out.push(`    Setup: ${s.exerciseSetups[exId]}`);
+      if (s.exerciseNotes?.[exId]) out.push(`    Note: ${s.exerciseNotes[exId]}`);
     }
     if (s.notes) out.push(`  Notes: ${s.notes}`);
     out.push('');
@@ -136,14 +171,17 @@ export function buildText(store: Store, days: number) {
 
 /** The most recent session before `date` that has anything logged. */
 export function previousSession(store: Store, date: string) {
-  const keys = Object.keys(store.sessions).filter((k) => k < date).sort().reverse();
-  for (const k of keys) {
-    const s = store.sessions[k];
-    if (s.deletedAt) continue;
+  const entries = Object.entries(store.sessions)
+    .filter(([id, session]) => !session.deletedAt && sessionDate(id, session) < date)
+    .sort((a, b) => {
+      const byDate = sessionDate(b[0], b[1]).localeCompare(sessionDate(a[0], a[1]));
+      return byDate || b[1].updatedAt.localeCompare(a[1].updatedAt);
+    });
+  for (const [id, s] of entries) {
     const sets = Object.values(s.exercises).flat();
-    if (sets.some((x) => x.done || x.reps || x.load) || s.notes) {
+    if (sets.some((x) => x.done || x.reps || x.load || x.distance) || s.notes) {
       return {
-        date: k,
+        date: sessionDate(id, s),
         session: s,
         setsDone: sets.filter((x) => x.done).length,
         volume: sessionVolume(s),
@@ -159,6 +197,9 @@ export function effective(ex: Exercise, store: Store): Exercise {
   if (!pref) return ex;
   const out: Exercise = { ...ex };
   if (pref.load !== undefined) out.weight = pref.load;
+  if (pref.loadUnit !== undefined) out.loadUnit = pref.loadUnit;
+  if (pref.distance !== undefined) out.distance = pref.distance;
+  if (pref.distanceUnit !== undefined) out.distanceUnit = pref.distanceUnit;
   if (pref.seconds !== undefined) {
     if (pref.seconds === null) delete out.seconds;
     else out.seconds = pref.seconds;
@@ -168,4 +209,91 @@ export function effective(ex: Exercise, store: Store): Exercise {
     else out.rest = pref.rest;
   }
   return out;
+}
+
+export interface AtlasExport {
+  schema: 'durability-tracker.atlas.v2';
+  exportedAt: string;
+  workouts: Array<{
+    id: string;
+    workoutId: string;
+    date: string;
+    name: string;
+    template: { id: string; name: string };
+    readiness: Session['readiness'];
+    timestamps: {
+      createdAt?: string;
+      startedAt?: string;
+      completedAt?: string;
+      updatedAt: string;
+    };
+    notes: string;
+    exercises: Array<{
+      id: string;
+      name: string;
+      note?: string;
+      setup?: string;
+      performances: Array<{
+        id: string;
+        index: number;
+        reps: string;
+        load?: { value: string; unit: LoadUnit };
+        distance?: { value: string; unit: DistanceUnit };
+        done: boolean;
+      }>;
+    }>;
+  }>;
+}
+
+export function buildAtlasExport(
+  store: Store, exportedAt = new Date().toISOString(),
+): AtlasExport {
+  const entries = Object.entries(store.sessions)
+    .filter(([, session]) => !session.deletedAt)
+    .sort((a, b) => {
+      const byDate = sessionDate(a[0], a[1]).localeCompare(sessionDate(b[0], b[1]));
+      return byDate || a[1].updatedAt.localeCompare(b[1].updatedAt);
+    });
+
+  return {
+    schema: 'durability-tracker.atlas.v2',
+    exportedAt,
+    workouts: entries.map(([id, session]) => ({
+      id,
+      workoutId: session.workoutId ?? session.day,
+      date: sessionDate(id, session),
+      name: workoutName(session),
+      template: { id: session.day, name: TEMPLATES[session.day]?.name ?? session.day },
+      readiness: session.readiness,
+      timestamps: {
+        createdAt: session.createdAt,
+        startedAt: session.startedAt,
+        completedAt: session.completedAt,
+        updatedAt: session.updatedAt,
+      },
+      notes: session.notes,
+      exercises: Object.entries(session.exercises)
+        .filter(([, sets]) => sets.some((set) =>
+          set.done || set.reps || set.load || set.distance))
+        .map(([exerciseId, sets]) => ({
+          id: exerciseId,
+          name: nameFor(session.day, exerciseId),
+          note: session.exerciseNotes?.[exerciseId] || undefined,
+          setup: session.exerciseSetups?.[exerciseId] || undefined,
+          performances: sets
+            .map((set, index) => ({ set, index }))
+            .filter(({ set }) => set.done || set.reps || set.load || set.distance)
+            .map(({ set, index }) => ({
+              id: `${id}:${exerciseId}:${index + 1}`,
+              index: index + 1,
+              reps: set.reps,
+              load: set.load ? { value: set.load, unit: loadUnitOf(set) } : undefined,
+              distance: set.distance
+                ? { value: set.distance, unit: distanceUnitOf(set) }
+                : undefined,
+              done: set.done,
+            })),
+        })),
+    })),
+  };
 }

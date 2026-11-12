@@ -1,14 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Readiness, Status, Store } from '../types';
 import { TEMPLATES } from '../data/templates';
-import { useStore, emptyStore } from '../state/store';
-import { buildText, fmtDate, previousSession } from '../lib/plan';
+import { hydrate, useStore, emptyStore } from '../state/store';
+import {
+  buildAtlasExport, buildText, fmtDate, formatSet, nameFor, previousSession,
+} from '../lib/plan';
+import { dateReadiness, sessionDate, workoutName } from '../data/workouts';
+import { workoutElapsedSeconds } from '../lib/duration';
 
 const num = (v: string) => (v === '' ? null : Number(v));
 
-export function CheckInView({ date, day }: { date: string; day: string }) {
+export function CheckInView({
+  calendarDate, day,
+}: { calendarDate: string; day: string }) {
   const { store, dispatch } = useStore();
-  const saved = store.sessions[date]?.readiness ?? null;
+  const saved = dateReadiness(store, calendarDate);
   const [f, setF] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<Status | null>(null);
   const [msg, setMsg] = useState('');
@@ -21,7 +27,7 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
       notes: saved?.notes ?? '',
     });
     setStatus(saved?.status ?? null);
-  }, [date]);
+  }, [calendarDate, saved]);
 
   const set = (k: string) => (e: { target: { value: string } }) => setF((p) => ({ ...p, [k]: e.target.value }));
 
@@ -33,17 +39,17 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
       amStiff: num(f.amStiff ?? ''), swelling: (f.swelling as 'yes' | 'no') ?? 'no',
       notes: f.notes ?? '', status,
     };
-    dispatch({ type: 'saveReadiness', date, day, readiness });
+    dispatch({ type: 'saveReadinessForDate', date: calendarDate, day, readiness });
     setMsg('Check-in saved');
     setTimeout(() => setMsg(''), 1800);
   }
 
-  const prev = previousSession(store, date);
+  const prev = previousSession(store, calendarDate);
 
   return (
     <section>
       <h2>Morning check-in</h2>
-      <p className="sub">{fmtDate(date)}</p>
+      <p className="sub">{fmtDate(calendarDate)}</p>
 
       {prev && (
         <div className="grading">
@@ -55,7 +61,7 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
           {prev.session.notes && <div className="gnote">“{prev.session.notes}”</div>}
           <div className="ghint">
             Your tendon reports the morning after, not during. These numbers are
-            the verdict on that session.
+            the verdict on that workout.
           </div>
         </div>
       )}
@@ -126,24 +132,132 @@ export function CheckInView({ date, day }: { date: string; day: string }) {
 
 export function HistoryView() {
   const { store } = useStore();
-  const keys = Object.keys(store.sessions).sort().reverse();
-  if (!keys.length) return <section><h2>History</h2><div className="empty">Nothing logged yet.</div></section>;
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const entries = Object.entries(store.sessions)
+    .filter(([, session]) => !session.deletedAt && (
+      !!session.startedAt || !!session.completedAt || !!session.notes
+      || Object.values(session.exercises).some((sets) =>
+        sets.some((set) => set.done || set.reps || set.load || set.distance))
+    ))
+    .sort((a, b) => {
+      const byDate = sessionDate(b[0], b[1]).localeCompare(sessionDate(a[0], a[1]));
+      return byDate || b[1].updatedAt.localeCompare(a[1].updatedAt);
+    });
+  if (!entries.length) return <section><h2>History</h2><div className="empty">Nothing logged yet.</div></section>;
+
+  const selected = selectedId
+    ? entries.find(([id]) => id === selectedId)
+    : undefined;
+  if (selected) {
+    const [id, session] = selected;
+    const date = sessionDate(id, session);
+    const template = TEMPLATES[session.day];
+    const templateIds = template?.blocks.flatMap((block) =>
+      block.exercises.map((exercise) => exercise.id)) ?? [];
+    const exerciseIds = [
+      ...templateIds.filter((exerciseId) => session.exercises[exerciseId]),
+      ...Object.keys(session.exercises).filter((exerciseId) => !templateIds.includes(exerciseId)),
+    ];
+    const duration = session.startedAt
+      ? Math.round(workoutElapsedSeconds(session, Date.parse(session.updatedAt)) / 60)
+      : null;
+
+    return (
+      <section>
+        <button className="mini histback" onClick={() => setSelectedId(null)}>
+          ‹ Back to history
+        </button>
+        <h2>{workoutName(session)}</h2>
+        <p className="sub">
+          {fmtDate(date)} · {template?.name ?? session.day}
+          {duration != null ? ` · ${duration} min` : ''}
+        </p>
+
+        {session.readiness && (
+          <div className={`histreadiness ${session.readiness.status}`}>
+            <b>{session.readiness.status.toUpperCase()} check-in</b>
+            <span>
+              Ankle {session.readiness.anklePain ?? '–'}/10 · Tendon{' '}
+              {session.readiness.tendonPain ?? '–'}/10 · KTW R{' '}
+              {session.readiness.ktwR ?? '–'} / L {session.readiness.ktwL ?? '–'} cm
+            </span>
+            {session.readiness.notes && <em>{session.readiness.notes}</em>}
+          </div>
+        )}
+
+        <div className="histdetails">
+          {exerciseIds.map((exerciseId) => {
+            const sets = session.exercises[exerciseId]
+              .map((set, index) => ({ set, index }))
+              .filter(({ set }) => set.done || set.reps || set.load || set.distance);
+            if (!sets.length) return null;
+            return (
+              <article key={exerciseId} className="histdetail">
+                <h3>{nameFor(session.day, exerciseId)}</h3>
+                <ol>
+                  {sets.map(({ set, index }) => (
+                    <li key={index}>
+                      <b>Set {index + 1}</b>
+                      <span>{formatSet(set)}{set.done ? '' : ' · not completed'}</span>
+                    </li>
+                  ))}
+                </ol>
+                {session.exerciseSetups?.[exerciseId] && (
+                  <p><b>Setup:</b> {session.exerciseSetups[exerciseId]}</p>
+                )}
+                {session.exerciseNotes?.[exerciseId] && (
+                  <p><b>Exercise note:</b> {session.exerciseNotes[exerciseId]}</p>
+                )}
+              </article>
+            );
+          })}
+        </div>
+
+        {session.notes && (
+          <div className="note histnotes"><b>Workout notes</b><br />{session.notes}</div>
+        )}
+        <p className="histstamp">
+          Started {session.startedAt ? new Date(session.startedAt).toLocaleString() : '—'}
+          {' · '}Completed {session.completedAt ? new Date(session.completedAt).toLocaleString() : 'not locked'}
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section>
-      <h2>History</h2><p className="sub">Most recent first</p>
+      <h2>History</h2><p className="sub">Most recent first · select a workout to inspect it</p>
       <table className="hist">
         <tbody>
-          <tr><th>Date</th><th>Session</th><th>Ankle</th><th>Tendon</th><th>Sets</th></tr>
-          {keys.map((k) => {
-            const s = store.sessions[k];
+          <tr><th>Date</th><th>Workout</th><th>Ankle</th><th>Tendon</th><th>Sets</th><th /></tr>
+          {entries.map(([id, s]) => {
             const done = Object.values(s.exercises).flat().filter((x) => x.done).length;
+            const label = workoutName(s);
+            const date = sessionDate(id, s);
             return (
-              <tr key={k}>
-                <td>{s.readiness && <span className={`dot ${s.readiness.status}`} />}{fmtDate(k)}</td>
-                <td>{TEMPLATES[s.day]?.name.split('—')[0].trim() ?? s.day}</td>
+              <tr
+                key={id}
+                className="histrow"
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${label} from ${fmtDate(date)}`}
+                onClick={() => setSelectedId(id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedId(id);
+                  }
+                }}
+              >
+                <td>{s.readiness && <span className={`dot ${s.readiness.status}`} />}{fmtDate(date)}</td>
+                <td>
+                  {label}
+                  <small className="hworkout">{TEMPLATES[s.day]?.name.split('—')[0].trim() ?? s.day}</small>
+                </td>
                 <td>{s.readiness?.anklePain ?? '–'}</td>
                 <td>{s.readiness?.tendonPain ?? '–'}</td>
                 <td>{done}</td>
+                <td className="histchev" aria-hidden>›</td>
               </tr>
             );
           })}
@@ -160,6 +274,7 @@ export function ExportView() {
   const [paste, setPaste] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   const text = buildText(store, days);
+  const atlas = JSON.stringify(buildAtlasExport(store), null, 2);
 
   const flash = (m: string) => { setMsg(m); setTimeout(() => setMsg(''), 1800); };
 
@@ -173,6 +288,23 @@ export function ExportView() {
       await navigator.clipboard.writeText(JSON.stringify(store));
       flash('Full backup copied — paste it on the other device');
     } catch { flash('Could not copy; use the file download instead'); }
+  }
+
+  async function copyAtlas() {
+    try {
+      await navigator.clipboard.writeText(atlas);
+      flash('Atlas JSON copied');
+    } catch { flash('Could not copy Atlas JSON; use the download instead'); }
+  }
+
+  function downloadAtlas() {
+    const blob = new Blob([atlas], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `durability-atlas-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    flash('Atlas JSON downloaded');
   }
 
   function download() {
@@ -195,7 +327,7 @@ export function ExportView() {
         const n = Object.keys(parsed.history).length;
         if (!window.confirm(
           `Add previous-performance data for ${n} exercises?\n\n` +
-          'This only fills the "last time" line. It adds no sessions and ' +
+          'This only fills the "last time" line. It adds no workouts and ' +
           'overwrites nothing you have logged.')) return;
         dispatch({ type: 'mergeHistory', history: parsed.history });
         flash(`History added for ${n} exercises`);
@@ -204,8 +336,8 @@ export function ExportView() {
       }
 
       const n = Object.keys(parsed.sessions).length;
-      if (!window.confirm(`Replace all data on this device with ${n} imported session${n === 1 ? '' : 's'}?`)) return;
-      dispatch({ type: 'replaceAll', store: parsed });
+      if (!window.confirm(`Replace all data on this device with ${n} imported workout${n === 1 ? '' : 's'}?`)) return;
+      dispatch({ type: 'replaceAll', store: hydrate(JSON.stringify(parsed)) });
       setPaste('');
       flash('Restored');
     } catch { flash('That is not a valid backup'); }
@@ -229,6 +361,8 @@ export function ExportView() {
       <button className="btn" onClick={copy}>Copy log for coach</button>
       <button className="btn sec" onClick={download}>Download JSON backup</button>
       <button className="btn sec" onClick={copyBackup}>Copy full backup to clipboard</button>
+      <button className="btn sec" onClick={copyAtlas}>Copy Atlas JSON</button>
+      <button className="btn sec" onClick={downloadAtlas}>Download Atlas JSON</button>
       <button className="btn sec" onClick={() => fileRef.current?.click()}>Restore from a file</button>
       <input ref={fileRef} type="file" accept="application/json" hidden
         onChange={(e) => e.target.files?.[0] && restore(e.target.files[0])} />
@@ -240,7 +374,7 @@ export function ExportView() {
       </p>
       <textarea
         className="t" value={paste} onChange={(e) => setPaste(e.target.value)}
-        placeholder='{"version":4,"sessions":{ … }}'
+        placeholder='{"version":6,"sessions":{ … }}'
         aria-label="Paste backup JSON"
         style={{ minHeight: 90, fontFamily: 'monospace', fontSize: '.76rem' }}
       />
@@ -249,8 +383,14 @@ export function ExportView() {
       </button>
       <h3>Preview</h3>
       <pre className="out">{text}</pre>
+      <h3>Atlas export</h3>
+      <p className="sub">
+        Structured JSON with stable workout, exercise and performance IDs,
+        explicit units, distance, notes, readiness and timestamps.
+      </p>
+      <pre className="out">{atlas}</pre>
       <button className="btn dgr" style={{ marginTop: 22 }} onClick={() => {
-        if (window.confirm('Erase every logged session on this device? This cannot be undone.')) {
+        if (window.confirm('Erase every logged workout on this device? This cannot be undone.')) {
           dispatch({ type: 'wipe' }); flash('Erased');
         }
       }}>Erase all data on this device</button>
@@ -274,8 +414,8 @@ export function RulesView() {
       <h3>Cut in this order</h3>
       <div className="note">1. Extra conditioning → 2. High-volume extensive contacts → 3. Decel/landing sets basketball already gave you → 4. Accessory sets → 5. Secondary strength → <b>6. Primary heavy strength last.</b></div>
       <h3>Basketball load</h3>
-      <div className="note">3 sessions/wk is your default: keep primary strength, drop 1 accessory set, cut formal contacts 40–60%.<br />
-        Surprise hard pickup → next lower session is automatically Yellow.</div>
+      <div className="note">3 basketball workouts/wk is your default: keep primary strength, drop 1 accessory set, cut formal contacts 40–60%.<br />
+        Surprise hard pickup → next lower workout is automatically Yellow.</div>
       <h3>Non-negotiables</h3>
       <div className="note">Soleus Raise twice a week. Heels Elevated Narrow Squat is the priority lift.
         No maximal left-foot attempts until the dunk ladder criteria are met.</div>

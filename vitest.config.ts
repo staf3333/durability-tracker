@@ -1,7 +1,11 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  define: { __BUILD_ID__: JSON.stringify('test') },
+  define: {
+    __BUILD_ID__: JSON.stringify('test'),
+    __DEPLOY_ENV__: JSON.stringify('production'),
+    __STAGING_HOST__: JSON.stringify(''),
+  },
   test: {
     environment: 'jsdom',
     globals: true,

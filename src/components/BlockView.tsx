@@ -1,5 +1,7 @@
 import type { Block, Session } from '../types';
-import { fmtSec, lastPerformance, membersInRound, roundsIn, setsOf, summarisePast } from '../lib/plan';
+import {
+  effective, fmtSec, lastPerformance, membersInRound, roundsIn, setsOf, summarisePast,
+} from '../lib/plan';
 import type { Store } from '../types';
 import { ExerciseLabel, SetRow } from './SetRow';
 import { ExerciseHistory } from './ExerciseHistory';
@@ -11,7 +13,7 @@ interface Props {
   store: Store;
   date: string;
   timer: TimerState | null;
-  onField: (exId: string, i: number, f: 'reps' | 'load', v: string) => void;
+  onField: (exId: string, i: number, f: 'reps' | 'load' | 'loadUnit' | 'distance', v: string) => void;
   onToggle: (exId: string, i: number) => void;
   onTimer: (exId: string, i: number, seconds: number) => void;
   onAddSet: (exId: string, defaults: number) => void;
@@ -19,16 +21,21 @@ interface Props {
   onAddRound: (block: Block) => void;
   onRemoveRound: (block: Block) => void;
   onRest: (seconds: number, exId?: string, index?: number) => void;
+  locked?: boolean;
 }
 
 export function BlockView(p: Props) {
   const { block, session, timer } = p;
+  const renderedBlock = {
+    ...block,
+    exercises: block.exercises.map((ex) => effective(ex, p.store)),
+  };
 
   if (block.mode === 'straight') {
     return (
       <div className="blk">
         <h3>{block.title}</h3>
-        {block.exercises.map((ex) => {
+        {renderedBlock.exercises.map((ex) => {
           const sets = setsOf(session, ex);
           const allDone = sets.length > 0 && sets.every((s) => s.done);
           const past = lastPerformance(p.store, p.date, ex.id);
@@ -56,6 +63,7 @@ export function BlockView(p: Props) {
                   <SetRow
                     key={i}
                     ex={ex} index={i} entry={entry} timer={timer} past={past?.sets[i]}
+                    disabled={p.locked}
                     onField={(f, v) => p.onField(ex.id, i, f, v)}
                     onToggle={() => p.onToggle(ex.id, i)}
                     onTimer={() => p.onTimer(ex.id, i, ex.seconds ?? 0)}
@@ -64,7 +72,8 @@ export function BlockView(p: Props) {
                 ))}
               </div>
               <div className="exbtns">
-                <button className="mini" onClick={() => p.onAddSet(ex.id, ex.sets)}>+ set</button>
+                <button className="mini" disabled={p.locked}
+                  onClick={() => p.onAddSet(ex.id, ex.sets)}>+ set</button>
                 {ex.rest && <button className="mini" onClick={() => p.onRest(ex.rest!)}>rest {fmtSec(ex.rest)}</button>}
               </div>
             </div>
@@ -75,8 +84,8 @@ export function BlockView(p: Props) {
   }
 
   // superset / circuit — logged round by round, the way it is actually executed
-  const rounds = roundsIn(block, session);
-  const rest = block.exercises.reduce((m, ex) => Math.max(m, ex.rest ?? 0), 0);
+  const rounds = roundsIn(renderedBlock, session);
+  const rest = renderedBlock.exercises.reduce((m, ex) => Math.max(m, ex.rest ?? 0), 0);
 
   return (
     <div className="blk">
@@ -92,7 +101,7 @@ export function BlockView(p: Props) {
         </div>
 
         <ul className="glist">
-          {block.exercises.map((ex) => {
+          {renderedBlock.exercises.map((ex) => {
             const past = lastPerformance(p.store, p.date, ex.id);
             const count = setsOf(session, ex).length;
             return (
@@ -116,9 +125,9 @@ export function BlockView(p: Props) {
         </ul>
 
         {Array.from({ length: rounds }, (_, r) => {
-          const members = membersInRound(block, session, r);
+          const members = membersInRound(renderedBlock, session, r);
           const allDone = members.length > 0 && members.every((ex) => setsOf(session, ex)[r].done);
-          const partial = members.length < block.exercises.length;
+          const partial = members.length < renderedBlock.exercises.length;
           return (
             <div key={r} className={`round${allDone ? ' done' : ''}`} data-r={r}>
               <div className="rlab">
@@ -130,6 +139,7 @@ export function BlockView(p: Props) {
                   key={ex.id}
                   grouped
                   ex={ex} index={r} entry={setsOf(session, ex)[r]} timer={timer}
+                  disabled={p.locked}
                   past={lastPerformance(p.store, p.date, ex.id)?.sets[r]}
                   onField={(f, v) => p.onField(ex.id, r, f, v)}
                   onToggle={() => p.onToggle(ex.id, r)}
@@ -146,8 +156,10 @@ export function BlockView(p: Props) {
         })}
 
         <div className="exbtns">
-          <button className="mini" onClick={() => p.onAddRound(block)}>+ round (all)</button>
-          <button className="mini" onClick={() => p.onRemoveRound(block)}>− round (all)</button>
+          <button className="mini" disabled={p.locked}
+            onClick={() => p.onAddRound(block)}>+ round (all)</button>
+          <button className="mini" disabled={p.locked}
+            onClick={() => p.onRemoveRound(block)}>− round (all)</button>
         </div>
       </div>
     </div>

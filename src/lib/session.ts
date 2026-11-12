@@ -1,5 +1,5 @@
 import type { Block, Exercise, Session, Store } from '../types';
-import { lastPerformance, setsOf, summarisePast } from '../lib/plan';
+import { lastPerformance, loadUnitOf, setsOf, summarisePast } from '../lib/plan';
 
 
 export interface FlatExercise {
@@ -26,8 +26,10 @@ export function prescription(ex: Exercise, session: Session | undefined) {
   const sets = setsOf(session, ex);
   const parts = [`${sets.length} set${sets.length === 1 ? '' : 's'}`, ex.target];
   const load = sets.map((s) => s.load).find(Boolean);
-  if (load) parts.push(`${load} lb`);
-  else if (ex.weight) parts.push('— lb');
+  const loaded = sets.find((s) => s.load);
+  if (load && loaded) parts.push(`${load} ${loadUnitOf(loaded)}`);
+  else if (ex.weight) parts.push(`— ${ex.loadUnit ?? 'lb'}`);
+  if (ex.distance) parts.push(`— ${ex.distanceUnit ?? 'm'}`);
   return parts.join(' · ');
 }
 

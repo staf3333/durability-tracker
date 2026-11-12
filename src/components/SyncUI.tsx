@@ -56,7 +56,7 @@ export function SignedOutNote({ onSignIn }: { onSignIn: () => void }) {
   const n = Object.keys(store.sessions).length;
   return (
     <div className="note">
-      <b>Not syncing.</b> {n > 0 ? `${n} session${n === 1 ? '' : 's'} are` : 'Your data is'} stored
+      <b>Not syncing.</b> {n > 0 ? `${n} workout${n === 1 ? '' : 's'} are` : 'Your data is'} stored
       on this device only. Signing in backs them up and syncs across devices —
       training works either way.
       <div style={{ marginTop: 10 }}>
